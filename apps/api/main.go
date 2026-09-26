@@ -91,19 +91,25 @@ func (app *app) applyMigrations(migrationsPath string) error {
 }
 func main() {
 	addr := flag.String("addr", ":8080", "HTTP network address")
-	pgSocket := flag.String("pgsock", "postgres://admin@/postgres?host=/var/lib/postgresql/18/docker&sslmode=disable", "Postgres Socket Path")
+	pgSocket := flag.String("pgsock", "postgres://anakin:skywalker@localhost:5432/death-star?sslmode=disable", "Postgres connection string")
+	flag.Parse()
 
 	pg, err := sql.Open("pgx", *pgSocket)
 	if err != nil {
-		log.Println("db connection failed")
+		log.Fatalf("db connection failed: %v", err)
 	}
 	if err := pg.Ping(); err != nil {
-		log.Println("db ping failed")
+		log.Fatalf("db ping failed: %v", err)
 	}
+	defer pg.Close()
+
 	app := app{
 		queries: db.New(pg),
+		db:      pg,
 	}
-	app.applyMigrations("file://db/migrations")
+	if err := app.applyMigrations("file://sql/migrations"); err != nil {
+		log.Println("couldnt apply migrations: %v", err)
+	}
 
 	err = http.ListenAndServe(*addr, app.routes())
 	if err != nil {
