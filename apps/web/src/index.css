@@ -1,0 +1,14 @@
+body {
+  margin: 0;
+  font-family: sans-serif;
+}
+
+#root {
+  padding: 1rem;
+}
+
+input,
+button {
+  font: inherit;
+  padding: 0.4rem;
+}

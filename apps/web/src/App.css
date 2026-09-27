@@ -1,0 +1,37 @@
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+pre {
+  margin: 0;
+  padding: 0.75rem;
+  background: #f4f4f4;
+  border: 1px solid #ccc;
+  white-space: pre-wrap;
+}
+
+.error {
+  color: #b00020;
+}
