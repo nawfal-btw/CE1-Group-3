@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
+	// "os"
 	"strconv"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -14,11 +14,11 @@ import (
 func (app *app) getIncidentByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		os.Exit(1)
+		log.Println("this bs", err)
 	}
 	incidentDB, err := app.queries.GetIncidentByID(r.Context(), int64(id))
 	if err != nil {
-		os.Exit(1)
+		log.Println("this bs", err)
 	}
 	incident_json := incidentCanon{
 		ID:        incidentDB.ID,
@@ -27,7 +27,7 @@ func (app *app) getIncidentByID(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(incident_json); err != nil {
-		os.Exit(1)
+		log.Println("this bs", err)
 	}
 
 }

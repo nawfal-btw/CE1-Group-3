@@ -58,8 +58,6 @@ func setupDB(pgSocket *string) app {
 	if err := pg.Ping(); err != nil {
 		log.Fatalf("db ping failed: %v", err)
 	}
-	defer pg.Close()
-
 	app := app{
 		queries: db.New(pg),
 		db:      pg,
