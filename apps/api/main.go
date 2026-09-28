@@ -5,7 +5,6 @@ import (
 	"flag"
 	"log"
 	"net/http"
-	"os"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	db "github.com/nawfal-btw/CE1-Group-3/apps/sql"
@@ -33,7 +32,7 @@ type app struct {
 func (app *app) applyMigrations(migrationsPath string) error {
 	driver, err := postgres.WithInstance(app.db, &postgres.Config{})
 	if err != nil {
-		log.Println("couldnt connect to db")
+		log.Println("couldnt connect to db: ", err)
 		return err
 	}
 	migration, err := migrate.NewWithDatabaseInstance(
@@ -41,11 +40,11 @@ func (app *app) applyMigrations(migrationsPath string) error {
 		"postgres", driver,
 	)
 	if err != nil {
-		log.Println("couldnt migrate schema")
+		log.Println("DB instance and migration interop issue: ", err)
 		return err
 	}
 	if err := migration.Up(); err != nil {
-		log.Println("couldnt migrate no2")
+		log.Println("Migrations unsuccessful: ", err)
 		return err
 	}
 	return nil
@@ -53,17 +52,17 @@ func (app *app) applyMigrations(migrationsPath string) error {
 func setupDB(pgSocket *string) app {
 	pg, err := sql.Open("pgx", *pgSocket)
 	if err != nil {
-		log.Fatalf("db connection failed: %v", err)
+		log.Fatalln("db connection failed: ", err, "\n Exiting...")
 	}
 	if err := pg.Ping(); err != nil {
-		log.Fatalf("db ping failed: %v", err)
+		log.Fatalln("db ping failed: ", err, "\n Exiting...")
 	}
 	app := app{
 		queries: db.New(pg),
 		db:      pg,
 	}
 	if err := app.applyMigrations("file://sql/migrations"); err != nil {
-		log.Println("couldnt apply migrations: %v", err)
+		log.Println("No migrations applied: ", err)
 	}
 	return app
 
@@ -77,7 +76,6 @@ func main() {
 
 	err := http.ListenAndServe(*addr, app.routes())
 	if err != nil {
-		log.Println("aaa")
-		os.Exit(1)
+		log.Fatalln("Failed to init webserver: ", err)
 	}
 }
