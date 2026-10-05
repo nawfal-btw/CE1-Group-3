@@ -136,6 +136,14 @@ Data (Paula, Kostas)
 UI (LLM + Rasmus)
 - TBD
 Report: 
+- Methodology
+	- Iterative development
+	- Requirements
+	- TechStack
+		- Vague
+- Theory / SOA
+- Problem description / Context & Motivation 
+- 
 
 
 # Notes
