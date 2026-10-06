@@ -1,0 +1,48 @@
+name: skywalker
+
+services:
+  api:
+    build: 
+      context: .
+      dockerfile: ./api/Dockerfile
+    image: api:latest
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: "postgres://anakin:skywalker@db:5432/death-star?sslmode=disable"
+      HTTP_ADDR: ":8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: web:latest
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    shm_size: 128mb
+    environment:
+      POSTGRES_PASSWORD: skywalker
+      POSTGRES_USER: anakin
+      POSTGRES_DB: death-star
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anakin -d death-star"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    
+volumes:
+  postgres_data:

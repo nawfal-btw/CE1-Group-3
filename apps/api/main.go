@@ -5,6 +5,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	db "github.com/nawfal-btw/CE1-Group-3/apps/sql"
@@ -67,12 +68,25 @@ func setupDB(pgSocket *string) app {
 	return app
 
 }
+func envOrDefault(name, fallback string) string {
+	if value, ok := os.LookupEnv(name); ok && value != "" {
+		return value
+	}
+	return fallback
+}
+
 func main() {
-	addr := flag.String("addr", ":8080", "HTTP network address")
-	pgSocket := flag.String("pgsock", "postgres://anakin:skywalker@localhost:5432/death-star?sslmode=disable", "Postgres connection string")
+	addrDefault := envOrDefault("HTTP_ADDR", ":8080")
+	dbDefault := envOrDefault(
+		"DATABASE_URL",
+		"postgres://anakin:skywalker@localhost:5432/death-star?sslmode=disable",
+	)
+
+	addr := flag.String("addr", addrDefault, "HTTP network address")
+	databaseURL := flag.String("database-url", dbDefault, "Postgres connection string")
 	flag.Parse()
 
-	app := setupDB(pgSocket)
+	app := setupDB(databaseURL)
 
 	err := http.ListenAndServe(*addr, app.routes())
 	if err != nil {
