@@ -5,7 +5,7 @@ metadata:
   name: api
 
 spec:
-  replicas: 1
+  replicas: 2
 
   selector:
     matchLabels:
@@ -47,3 +47,4 @@ spec:
           command: ["sh", "-c"]
           args:
             - exec ./api -pgsock "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-service:5432/${POSTGRES_DB}?sslmode=disable"
+
