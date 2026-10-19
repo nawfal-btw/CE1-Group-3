@@ -85,70 +85,19 @@ The user-facing interface used to interoperate with the API and WebSocket. Provi
 # Milestones
 ## Iteration 0 - 2026.09.30
 > A user can create an Incident containing location and view the incident in the UI
-### Scope
-- Infra
-	- Debian VM
-	- Single node K8s
-	- 3 K8s pods  (w/ DB and API, UI)
-	- reachable only from localhost. 
-- Application
-	- Simple REST API with:
-		- POST /incidents
-		- GET /incidents/{id}
-			```json
-			{
-					"location": {
-						"latitude": float32,
-						"longitude": float32
-					},
-				}
-			```
-		- Validate req
-		- create incident and store in postgres DB
-		
-- Data
-	- Single Postgres table for incidents
-		- id
-		- latitude
-		- longitude
-		- created_at
-- UI
-	- Incident creation form
-	- location input (in coordinates)
-	- list/display incidents with ID, location, created at
-	- Optionally map (MapLibre)
-	- retrieve incident and show in UI
+	See [[Iteration 0]]
 ## Iteration 1 - 2026.10.16
 > Implement canonical model and adapt API accordingly, deployment should be declarative such that a single (or few) commands initializes everything
-### Scope
-Infrastructure (Kostas, Anakin)
-- Host machine has kubernetes control-panel
-	- 2 VMs identically configured with Ansible with kubernetes client
-	- Make them talk
-Application (Rasmus, Anakin)
-- Adapt API according to Business Logic
-- Container image for api (either scratch image or lightweight filesystem e.g. alpine)
-- Authentication: TLS
-Business Logic (Paula, Rasmus)
-- 
-Data (Paula, Kostas)
-- DB should be single-node per EMS network, i.e. different db per locally conected EMS network
-UI (LLM + Rasmus)
-- TBD
-Report: 
-- Methodology
-	- Iterative development
-	- Requirements
-	- TechStack
-		- Vague
-- Theory / SOA
-- Problem description / Context & Motivation 
-- 
-
+	See [[Iteration 1]]
 
 # Notes
 k6: testing w/ human behavior
 p95, p99 latency, 0% error
 docker scratch images minimizes attack-surface
 supply-chain attack from dependencies
+
+Ask regarding where to host.
+CLAAUDIA
+Decide on which platofrm
+Sokol avialability of compute
 
