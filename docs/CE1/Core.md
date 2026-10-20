@@ -1,3 +1,113 @@
+
+## EIDO Based
+IncidentComponent
+	IncidentCanonID
+	IncidentInternalID
+	IncidentTypeInternalCode
+	IncidentTypeInternalText
+	IncidentTypeCanonCode
+	IncidentTypeCanonText
+	IncidentStatusInternalCode
+	IncidentStatusCanonCode
+	IncidentPriorityInternalText
+	IncidentPriorityCanon
+	CallRef
+	CallBackRef
+	DispatchRef
+	EmergencyResourceRef
+	AgentRef
+	LocationRef
+	PersonRef
+	VehicleRef
+	DocumentID (Maybe same as IncidentCanonID, or a list of IDs used to refer to this incident)
+	
+CallComponent
+	CallQueueID
+	CallTypePrimary
+	CallDirection
+	CallStartTime
+	CallAnswerTime
+	CallState
+	AgentRef
+	CallBackRef
+	LocationRef
+	PersonRef
+	
+CallBackComponent
+	CallBackInfoURI
+	
+DispatchComponent
+	AgencyRef
+	AgentRef
+	EmergencyResourceRef
+	
+ResourceComponent
+	ResourceTypeCanon
+	ResourceName
+	ResourceStatus
+	ResourceTypeInternal
+	ResourceAttribute
+	AgentRef
+	AgencyRef
+	LocationRef
+	DestinationRef
+	ETA
+	
+AgencyComponent
+	AgencyContactInfo
+	AgencyRelationType
+	AgencyType
+	
+AgentComponent
+LocationComponent
+	LocationGIS
+	CrossStreet
+	IntersectingStreet
+	LocationDescription
+	CellTowerSectorID
+	
+PersonComponent
+	PersonRelationType
+	PersonRelationTime
+	CallRef
+	LocationRef
+	CallBackRef
+VehicleComponent
+	VehicleRelationType
+	VehicleRelationTime
+	LocationRef
+	
+	
+	
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Incident
 - ID
 - Type
