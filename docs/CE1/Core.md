@@ -11,11 +11,13 @@ IncidentComponent
 	IncidentStatusCanonCode
 	IncidentPriorityInternalText
 	IncidentPriorityCanon
+	IncidentOwner
 	CallRef
 	CallBackRef
 	DispatchRef
-	EmergencyResourceRef
+	EmergencyResourceRef [(Resource1)]
 	AgentRef
+	AgencyRef [(*Agency, Relation), (*Agency2, AnotherRelation)]
 	LocationRef
 	PersonRef
 	VehicleRef
@@ -39,7 +41,7 @@ CallBackComponent
 DispatchComponent
 	AgencyRef
 	AgentRef
-	EmergencyResourceRef
+	EmergencyResourceRef 
 	
 ResourceComponent
 	ResourceTypeCanon
@@ -55,10 +57,13 @@ ResourceComponent
 	
 AgencyComponent
 	AgencyContactInfo
-	AgencyRelationType
 	AgencyType
 	
 AgentComponent
+	AgentContactInfo
+	AgentRoleCanon
+	AgencyRef
+
 LocationComponent
 	LocationGIS
 	CrossStreet
@@ -72,6 +77,7 @@ PersonComponent
 	CallRef
 	LocationRef
 	CallBackRef
+	
 VehicleComponent
 	VehicleRelationType
 	VehicleRelationTime
