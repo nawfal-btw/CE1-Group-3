@@ -18,85 +18,101 @@ const (
 	IncCancelled
 )
 
-type IncidentComponent struct {
+type (
+	ID       int64
+	Code     int16
+	Priority int8
+)
+
+type IncidentInternal struct {
+	AgencyRef                    AgencyComponent
+	InternalIncidentID           string
+	InternalIncidentTypeCode     string
+	InternalIncidentTypeText     string
+	InternalIncidentStatusCode   string
+	InternalIncidentPriorityText string
+}
+type IncidentCanon struct {
 	// IncidentTypeInternalCode int16
 	// IncidentTypeInternalText string
-	IncidentTypeCommonRegistry   int16
-	IncidentStatusCommonRegistry int16
-	AgentReference               int32
-	LocationReference            LocationComponent
-	PersonReference              PersonComponent
-	VehicleReference             VehicleComponent
-	DocumentIdentification       int32
-	ReportNumberType             int16
-	IncidentCommonPriorityNumber int8
+	CanonIncidentID         int64
+	CanonIncidentTypeCode   int16
+	CanonIncidentTypeText   string
+	CanonIncidentStatusCode int16
+	CanonIncidentPriority   int16
+	IncidentInternal        []IncidentInternal
+	IncidentOwner           *AgencyComponent
+	CallRefs                []*CallComponent
+	DispatcherRefs          []*DispatcherComponent
+	AllocationRef           []*Allocation
+	// DocumentID
 }
 
 // Unsure, all individuals that call?j
 type CallComponent struct {
-	StandardPrimaryCallType int16
-	Direction               int8
-	CallStartTime           time.Time
-	AnswerStartTime         time.Time
-	CallStateRegistry       int8
-	AgentReference          AgentComponent
-	CallbackReference       CallbackComponent
-	// Location of call-site
-	LocationReference LocationComponent
-	PersonReference   PersonComponent
+	// CallQueueID
+	CallTypePrimary
+	CallDirection
+	CallStartTime
+	CallAnswerTime
+	CallStatus
+	AgentRef
+	CallBackRef
+	LocationRef
+	PersonRef
 }
-type CallbackComponent struct {
-	CallbackInformationURI string
+type CallBackComponent struct {
+	CallBackInformationURI string
 }
-type DispatchComponent struct {
-	AgencyRef            AgencyComponent
-	AgentRef             AgentComponent
-	EmergencyResourceRef EmergencyResourceComponent
+type DispatcherComponent struct {
+	AgencyRef
+	AgentRef
+	ResourceRefs
 }
-type EmergencyResourceComponent struct {
-	EmergencyResourceTypeCommonRegistry int8
-	ResourceAttributeRegistry           int8
-	EmergencyResourceName               string
-	PrimaryUnitStatusRegistry
-	SecondaryUnitStatusRegistry
-	AgentRef        AgentComponent
-	PersonRef       PersonComponent
-	VehicleRef      VehicleComponent
-	UnitLocationRef LocationComponent
-	ETA             time.Time
+type ResourceComponent struct {
+	ResourceTypeCanon
+	ResourceName
+	ResourceStatus
+	ResourceTypeInternal
+	ResourceAttribute
+	AgentRef
+	AgencyRef
+	LocationRef
+	DestinationRef
+	ETA
 }
 
 // Required
 type AgencyComponent struct {
-	AgencyContactInfo             string
-	AgencyRoleDescriptionRegistry string
-	AgencyType                    string
-	IncidentOwner                 bool
+	AgencyContactInfo
+	AgencyRelationType
+	AgencyType
 }
 
 // Conditional
 type AgentComponent struct {
-	AgentContactInfo  string
-	AgentRoleRegistry int
-	AgentAgencyRef    int
+	AgentContactInfo
+	AgentRoleCanon
+	AgencyRef
 }
 type LocationComponent struct {
-	LocationTypeDescriptionRegistry int8
-	LocationByValue                 GIS
-	LocationDescriptionText         string
-	CrossStreetByValue              string
-	IntersectingStreetByValue       string
-	CellTowerSectorID               int32
+	LocationGIS
+	CrossStreet
+	IntersectingStreet
+	LocationDescription
+	CellTowerSectorID
 }
 type PersonComponent struct {
-	PersonIncidentRoleRegistry int8
-	CallIdentifier             CallComponent
-	LocationRef                LocationComponent
-	CallbackRef                CallbackComponent
+	PersonRelationType
+	PersonRelationTime
+	CallRef
+	LocationRef
+	CallBackRef
 }
 type VehicleComponent struct {
-	VehicleRelationshipType int8
-	LocationRef             LocationComponent
+	VehicleRelationType
+	VehicleRelationTime
+	LocationRef
 }
 
 // Link component maybe
