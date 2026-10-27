@@ -16,29 +16,42 @@ type (
 )
 
 const (
-	PLANNING    IncidentStatus = 0
-	IN_PROGRESS IncidentStatus = 1
-	RESOLVED    IncidentStatus = 2
-	CANCELLED   IncidentStatus = 3
+	PRIORITYMIN IncidentPriority = iota
+	_1
+	_2
+	_3
+	_4
+	_5
+	PRIORITYMAX
 )
 const (
-	_NONEMERG IncidentType = 0
-	_911H     IncidentType = 1
-	_911OPN   IncidentType = 2
-	_ABDOM    IncidentType = 3
-	_ABDUCTF  IncidentType = 4
-	_ABDUCTNF IncidentType = 5
-	_ABUSE    IncidentType = 6
-	_ACCIND   IncidentType = 7
-	_ACTSHOOT IncidentType = 8
-	_ADMIN    IncidentType = 9
-	_AIR      IncidentType = 10
-	_AIRINC   IncidentType = 11
-	_ALIEN    IncidentType = 12
-	_ALLERGIC IncidentType = 13
-	_ALMA     IncidentType = 14
-	_ALMB     IncidentType = 15
-	_ALMH     IncidentType = 16
+	STATUSMIN IncidentStatus = iota
+	PLANNING
+	IN_PROGRESS
+	RESOLVED
+	CANCELLED
+	STATUSMAX
+)
+const (
+	TYPEMIN IncidentType = iota
+	_NONEMERG
+	_911H
+	_911OPN
+	_ABDOM
+	_ABDUCTF
+	_ABDUCTNF
+	_ABUSE
+	_ACCIND
+	_ACTSHOOT
+	_ADMIN
+	_AIR
+	_AIRINC
+	_ALIEN
+	_ALLERGIC
+	_ALMA
+	_ALMB
+	_ALMH
+	TYPEMAX
 )
 
 type Field[T any] struct {
@@ -50,8 +63,8 @@ type Incident struct {
 	Type        Field[IncidentType]
 	Status      Field[IncidentStatus]
 	Priority    Field[IncidentPriority]
-	Location    Field[LocationComponent]
-	Description Field[string]
+	Location    LocationComponent
+	Description string
 
 	CreatedAtUTC Field[time.Time]
 	UpdatedAtUTC Field[time.Time]
@@ -74,10 +87,61 @@ type LocationComponent struct {
 	LocationDescription string
 }
 
-func (i Incident) NewIncident(iID IncidentID, iType IncidentType, iStatus IncidentStatus, iPrio IncidentPriority, iLoc LocationComponent, iDescription string) {
-
-	incident := Incident{
-		ID,
+func NewIncident(iType IncidentType, iStatus IncidentStatus, iPriority IncidentPriority, iLocation LocationComponent, iDescription string) (*Incident, error) {
+	var incident Incident
+	if incident.IsValidType(iType) {
+		incident.Type.Initialized = true
+		incident.Type.Value = iType
+	} else {
+		incident.Type.Initialized = false
 	}
+	if incident.IsValidStatus(iStatus) {
+		incident.Status.Initialized = true
+		incident.Type.Value = iType
+	} else {
+		incident.Status.Initialized = false
+	}
+	if incident.IsValidPriority(iPriority) {
+		incident.Priority.Initialized = true
+		incident.Priority.Value = iPriority
+	} else {
+		incident.Priority.Initialized = false
+	}
+	if incident.IsValidLocationGIS(iLocation) {
+		incident.Location.GIS.Initialized = true
+		incident.Location.GIS.Value.Longitude = iLocation.GIS.Value.Longitude
+		incident.Location.GIS.Value.Latitude = iLocation.GIS.Value.Latitude
+	} else {
+		incident.Priority.Initialized = false
+	}
+	return &incident, nil
+}
 
+func (i Incident) IsValidType(iType IncidentType) bool {
+	if iType <= TYPEMIN || iType >= TYPEMAX {
+		return false
+	}
+	return true
+}
+func (i Incident) IsValidStatus(iStatus IncidentStatus) bool {
+	if iStatus <= STATUSMIN || iStatus >= STATUSMAX {
+		return false
+	}
+	return true
+}
+func (i Incident) IsValidPriority(iPriority IncidentPriority) bool {
+	if iPriority <= PRIORITYMIN || iPriority >= PRIORITYMAX {
+		return false
+	}
+	return true
+}
+
+func (i Incident) IsValidLocationGIS(iLocation LocationComponent) bool {
+	if iLocation.GIS.Value.Latitude < 0.0 || iLocation.GIS.Value.Longitude < 0.0 {
+		return false
+	}
+	if iLocation.GIS.Value.Latitude > 180.0 || iLocation.GIS.Value.Longitude > 180.0 {
+		return false
+	}
+	return true
 }

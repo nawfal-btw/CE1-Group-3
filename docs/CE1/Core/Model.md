@@ -1,4 +1,5 @@
-
+# Responsibility
+Interops with the API. Ensures that API calls1
 ## EIDO Based
 IncidentComponent
 	IncidentCanonID
@@ -82,37 +83,6 @@ VehicleComponent
 	VehicleRelationType
 	VehicleRelationTime
 	LocationRef
-	
-	
-	
-	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Incident
 - ID
@@ -147,4 +117,8 @@ Dispatcher:
 - track resources 
 - track incidents
 - get info from dispatched units
+
+
+## NW
+Call-taker -> Dispatcher
 
