@@ -74,7 +74,8 @@ type LocationComponent struct {
 	LocationDescription string
 }
 
-func (i Incident) NewIncident(iID IncidentID, iType IncidentType, iStatus IncidentStatus, iPrio IncidentPriority, iLoc LocationComponent) {
+func (i Incident) NewIncident(iID IncidentID, iType IncidentType, iStatus IncidentStatus, iPrio IncidentPriority, iLoc LocationComponent, iDescription string) {
+
 	incident := Incident{
 		ID,
 	}
