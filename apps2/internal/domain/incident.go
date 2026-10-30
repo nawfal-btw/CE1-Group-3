@@ -3,9 +3,8 @@
 package domain
 
 import (
+	"errors"
 	"time"
-
-	app "github.com/nawfal-btw/CE1-Group-3/apps2/internal/application"
 )
 
 type (
@@ -15,6 +14,7 @@ type (
 	IncidentStatus   int8
 )
 
+// This should not be hardcoded but derived from a file
 const (
 	PRIORITYMIN IncidentPriority = iota
 	_1
@@ -24,6 +24,8 @@ const (
 	_5
 	PRIORITYMAX
 )
+
+// This should not be hardcoded but derived from a file
 const (
 	STATUSMIN IncidentStatus = iota
 	PLANNING
@@ -32,6 +34,8 @@ const (
 	CANCELLED
 	STATUSMAX
 )
+
+// This should not be hardcoded but derived from a file
 const (
 	TYPEMIN IncidentType = iota
 	_NONEMERG
@@ -55,8 +59,8 @@ const (
 )
 
 type Field[T any] struct {
-	Value       T
-	Initialized bool
+	Value T
+	Init  bool
 }
 type Incident struct {
 	ID          Field[IncidentID]
@@ -74,6 +78,16 @@ type Incident struct {
 	// Calls        []CallComponent
 	// Allocations  []Allocation
 	// ExternalRefs []LocalIncident
+	Version string
+}
+type IncidentPatch struct {
+	Type        Field[IncidentType]
+	Status      Field[IncidentStatus]
+	Priority    Field[IncidentPriority]
+	Location    LocationComponent
+	Description string
+
+	// Owner        AgencyRef
 }
 
 type LocationGIS struct {
@@ -87,34 +101,104 @@ type LocationComponent struct {
 	LocationDescription string
 }
 
-func NewIncident(iType IncidentType, iStatus IncidentStatus, iPriority IncidentPriority, iLocation LocationComponent, iDescription string) (*Incident, error) {
-	var incident Incident
-	if incident.IsValidType(iType) {
-		incident.Type.Initialized = true
-		incident.Type.Value = iType
-	} else {
-		incident.Type.Initialized = false
+func NewIncident(p IncidentPatch) (*Incident, error) {
+	var i Incident
+	// is it init
+	if p.Type.Init {
+		// is it valid -> Y: Valid
+		if !i.IsValidType(p.Type.Value) {
+			return &Incident{}, errors.New("Invalid Type")
+		}
 	}
-	if incident.IsValidStatus(iStatus) {
-		incident.Status.Initialized = true
-		incident.Type.Value = iType
-	} else {
-		incident.Status.Initialized = false
+	if p.Status.Init {
+		// is it valid -> Y: Valid
+		if !i.IsValidStatus(p.Status.Value) {
+			return &Incident{}, errors.New("Invalid Status")
+		}
 	}
-	if incident.IsValidPriority(iPriority) {
-		incident.Priority.Initialized = true
-		incident.Priority.Value = iPriority
-	} else {
-		incident.Priority.Initialized = false
+	if p.Priority.Init {
+		// is it valid -> Y: Valid
+		if !i.IsValidPriority(p.Priority.Value) {
+			return &Incident{}, errors.New("Invalid Priority")
+		}
 	}
-	if incident.IsValidLocationGIS(iLocation) {
-		incident.Location.GIS.Initialized = true
-		incident.Location.GIS.Value.Longitude = iLocation.GIS.Value.Longitude
-		incident.Location.GIS.Value.Latitude = iLocation.GIS.Value.Latitude
-	} else {
-		incident.Priority.Initialized = false
+	if p.Location.GIS.Init {
+		// is it valid -> Y: Valid
+		if !i.IsValidLocationGIS(p.Location) {
+			return &Incident{}, errors.New("Invalid Location")
+		}
 	}
-	return &incident, nil
+	i.Type = p.Type
+	i.Status = p.Status
+	i.Priority = p.Priority
+	i.Location = p.Location
+	i.Description = p.Description
+	return &i, nil
+}
+func (i *Incident) PatchIncident(p IncidentPatch) error {
+	if p.Type.Init {
+		if !i.IsValidType(p.Type.Value) {
+			return errors.New("Invalid Type")
+		}
+	}
+	if p.Status.Init {
+		if !i.IsValidStatus(p.Status.Value) {
+			return errors.New("Invalid Status")
+		}
+		if isValid, err := i.IsValidTransition(p.Status); !isValid {
+			return err
+		}
+	}
+	if p.Priority.Init {
+		if !i.IsValidPriority(p.Priority.Value) {
+			return errors.New("Invalid Priority")
+		}
+	}
+	if p.Location.GIS.Init {
+		if !i.IsValidLocationGIS(p.Location) {
+			return errors.New("Invalid Location")
+		}
+	}
+	i.Type = p.Type
+	i.Status = p.Status
+	i.Priority = p.Priority
+	i.Location = p.Location
+	i.Description = p.Description
+	return nil
+}
+func (i Incident) IsValidTransition(p any) (bool, error) {
+	switch t := p.(type) {
+	case IncidentStatus:
+		isValid, err := i.IsValidStatusTransition(t)
+		return isValid, err
+	default:
+		return false, errors.New("Unsupported transition check")
+	}
+
+}
+func (i Incident) IsValidStatusTransition(s IncidentStatus) (bool, error) {
+	switch i.Status.Value {
+	case PLANNING:
+		if s == RESOLVED {
+			return false, errors.New("Invalid Status Transition PLANNING -> RESOLVED")
+		}
+	case IN_PROGRESS:
+		if s == PLANNING {
+			return false, errors.New("Invalid Status Transition IN PROGRESS -> PLANNING")
+		}
+	case CANCELLED:
+		if s == RESOLVED {
+			return false, errors.New("Invalid Status Transition IN CANCELLED -> RESOLVED")
+		}
+	case RESOLVED:
+		if s == CANCELLED {
+			return false, errors.New("Invalid Status Transition IN RESOLVED -> CANCELLED")
+		}
+	default:
+		return false, errors.New("Invalid Status slipped through...")
+	}
+	return true, nil
+
 }
 
 func (i Incident) IsValidType(iType IncidentType) bool {

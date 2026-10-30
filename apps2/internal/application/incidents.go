@@ -5,10 +5,13 @@ package application
 import (
 	domain "github.com/nawfal-btw/CE1-Group-3/apps2/internal/domain"
 	repo "github.com/nawfal-btw/CE1-Group-3/apps2/internal/repository/postgres"
+	http "github.com/nawfal-btw/CE1-Group-3/apps2/internal/transport/http"
+	http "github.com/nawfal-btw/CE1-Group-3/apps2/internal/transport/websocket"
 )
 
 type IncidentService struct {
-	Incident repo.IncidentORM
+	ORM repo.IncidentORM
+	transport
 }
 
 func (i *IncidentService) Create(input IncidentInput) (*domain.Incident, error) {
