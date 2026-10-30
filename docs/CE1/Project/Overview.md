@@ -8,42 +8,6 @@ Brokering communication between emergency services is not a task that capitalize
 
 Our product provides a unified communication interface using [insert chosen standard here]. This enables us to act as a centralized broker, transforming and distributing information across heterogenous systems, whilst providing each user with a graphical user interface to send and receive the exact information they need. This lessens the burden on the dispatcher and offloads the auxillary details of the situation to our system. Alleviating her of the menial responsibility of brokering and book-keeping, while having said information readily available at the press of a button.
 
-# Requirements
-___
-See [[Requirements]] for how to formulate idiomatic requirements
-## Functional 
-- The system shall enable communication between emergency services with our platform as the centralized middleman.
-- The system shall enable real-time tracking of mobile emergency resources during the emergency, with a latency < X.
-- The system shall provide each user a role-specific dashboard
-	- the role-specific dashboard shall contain all available and user-relevant information
-		- the dashboard shall show GPS-view of their own position and the incident location
-		- the dispatcher dashboard shall show GPS-view of all active mobile emegency resources
-	- the role-specific dashboard shall be capable of transmitting information back to the system.
-	- the role-specific utilities shall only be accessible by their respective roles
-- The system shall provide the dispatcher with department internals such as: available vehicles, staff, etc.
-
-## Non-Functional
-### Performance
-> Notes: performance is not mission-critical given human-involvement. Correctness is the metric of interest
-- The business logic shall predefine permissible state-transitions effectively eliminating the possibility of certain logical bugs.
-- system latency shall remain stable (not small) under variable loads (within reason: how much is "variable" - elaborate)
-### Interface
-> Notes: Actual CAD integration is out-of-scope, but most (?) follow ISO/other standards
-- the system shall seemlessly integrate with CADs that follow standard [insert standard here]
-- the system shall provide a flexible compatibility interface to integrate with CADs not following standard [insert same standard].
-- the GUI shall function on chromium and gecko (firefox) based webbrowsers
-> Maybe electron instead?
-### Quality characteristic
-- Inbound and outbound communication from server/clients shall be encrypted
-- Communication shall happen over private tailnet
-- tailnet shall only be reachable from from verified clients
-> Additional security layer - Possible since every client is known prior
-
-### Constraints
-- The system shall be vendor-agnostic with the possibility to host it on-prem servers or private cloud providers
-> Government entities requires certain levels of data-protection e.g. ownership of infra.
-### Environmental
-Dependent on the implementation of the client. 
 
 # Architecture/TechStack
 ___ 
