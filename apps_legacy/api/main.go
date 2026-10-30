@@ -3,27 +3,16 @@ package main
 import (
 	"database/sql"
 	"flag"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	db "github.com/nawfal-btw/CE1-Group-3/apps/sql"
 	"log"
 	"net/http"
 	"os"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
-	db "github.com/nawfal-btw/CE1-Group-3/apps/sql"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
-
-type incidentCanon struct {
-	ID        int64  `json:"id"`
-	Latitude  string `json:"latitude"`
-	Longitude string `json:"longitude"`
-}
-type incidentPost struct {
-	Latitude  string `json:"latitude"`
-	Longitude string `json:"longitude"`
-}
 
 type app struct {
 	queries *db.Queries

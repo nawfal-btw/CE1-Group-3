@@ -21,3 +21,15 @@ We have chosen the following security measures for application:
 	- Dispatchers may only read/write to incidents of which they are assigned, or of which the incident owner has allowed read/write access.
 - Thus the main attack-vector is unauthorized acquisition of a client-machine, but the exposure is minimized due to the *least privileges* setup
 Is this adequate integration of the security aspect of the project.
+___
+Who is the target audience of the report i.e. what can be assumed to be known: Technical 
+
+
+
+
+
+
+
+
+
+
