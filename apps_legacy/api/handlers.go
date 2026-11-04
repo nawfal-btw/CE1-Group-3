@@ -22,11 +22,6 @@ func (app *app) getIncidentByID(w http.ResponseWriter, r *http.Request) {
 	incident_json := core.Incident{
 		ID:   core.Field[core.IncidentID]{Value: core.IncidentID(incident.ID), Initialized: true},
 		Type: core.Field[core.IncidentType]{Value: core.IncidentType(incident.Type), Initialized: true},
-		ID:   core.Field[core.IncidentID]{Value: core.IncidentID(incident.ID), Initialized: true},
-		ID:   core.Field[core.IncidentID]{Value: core.IncidentID(incident.ID), Initialized: true},
-		ID:   core.Field[core.IncidentID]{Value: core.IncidentID(incident.ID), Initialized: true},
-		ID:   core.Field[core.IncidentID]{Value: core.IncidentID(incident.ID), Initialized: true},
-		ID:   core.Field[core.IncidentID]{Value: core.IncidentID(incident.ID), Initialized: true},
 	}
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(incident_json); err != nil {
