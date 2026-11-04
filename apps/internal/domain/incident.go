@@ -4,11 +4,12 @@ package domain
 
 import (
 	"errors"
+	"github.com/google/uuid"
 	"time"
 )
 
 type (
-	IncidentID       int64
+	IncidentID       uuid.UUID
 	IncidentType     int16
 	IncidentPriority int8
 	IncidentStatus   int8
@@ -63,12 +64,12 @@ type Field[T any] struct {
 	Init  bool
 }
 type Incident struct {
-	ID          Field[IncidentID]
+	ID          IncidentID
 	Type        Field[IncidentType]
 	Status      Field[IncidentStatus]
 	Priority    Field[IncidentPriority]
 	Location    LocationComponent
-	Description string
+	Description Field[string]
 
 	CreatedAtUTC Field[time.Time]
 	UpdatedAtUTC Field[time.Time]
@@ -85,7 +86,7 @@ type IncidentPatch struct {
 	Status      Field[IncidentStatus]
 	Priority    Field[IncidentPriority]
 	Location    LocationComponent
-	Description string
+	Description Field[string]
 
 	// Owner        AgencyRef
 }
@@ -96,9 +97,9 @@ type LocationGIS struct {
 }
 type LocationComponent struct {
 	GIS                 Field[LocationGIS]
-	Address             string
-	ProximateLandmarks  []string
-	LocationDescription string
+	Address             Field[string]
+	ProximateLandmarks  Field[[]string]
+	LocationDescription Field[string]
 }
 
 func NewIncident(p IncidentPatch) (*Incident, error) {
@@ -128,6 +129,7 @@ func NewIncident(p IncidentPatch) (*Incident, error) {
 			return &Incident{}, errors.New("Invalid Location")
 		}
 	}
+	i.ID = IncidentID(uuid.New())
 	i.Type = p.Type
 	i.Status = p.Status
 	i.Priority = p.Priority
@@ -136,34 +138,55 @@ func NewIncident(p IncidentPatch) (*Incident, error) {
 	return &i, nil
 }
 func (i *Incident) PatchIncident(p IncidentPatch) error {
+	patched := *i
+	var errAll error
 	if p.Type.Init {
 		if !i.IsValidType(p.Type.Value) {
-			return errors.New("Invalid Type")
+			errAll = errors.Join(errAll, errors.New("Invalid Type"))
 		}
+		patched.Type = p.Type
 	}
+
 	if p.Status.Init {
 		if !i.IsValidStatus(p.Status.Value) {
-			return errors.New("Invalid Status")
+			errAll = errors.Join(errAll, errors.New("Invalid Status"))
 		}
-		if isValid, err := i.IsValidTransition(p.Status); !isValid {
-			return err
+		if valid, err := i.IsValidTransition(p.Status); !valid {
+			errAll = errors.Join(errAll, err)
 		}
+		patched.Status = p.Status
 	}
+
 	if p.Priority.Init {
 		if !i.IsValidPriority(p.Priority.Value) {
-			return errors.New("Invalid Priority")
+			errAll = errors.Join(errAll, errors.New("Invalid Priority"))
 		}
+		patched.Priority = p.Priority
 	}
+
 	if p.Location.GIS.Init {
 		if !i.IsValidLocationGIS(p.Location) {
-			return errors.New("Invalid Location")
+			errAll = errors.Join(errAll, errors.New("Invalid Location GIS"))
 		}
+		patched.Location.GIS = p.Location.GIS
 	}
-	i.Type = p.Type
-	i.Status = p.Status
-	i.Priority = p.Priority
-	i.Location = p.Location
-	i.Description = p.Description
+	if p.Location.Address.Init {
+		patched.Location.Address = p.Location.Address
+	}
+	if p.Location.LocationDescription.Init {
+		patched.Location.Address = p.Location.Address
+	}
+	if p.Location.ProximateLandmarks.Init {
+		patched.Location.ProximateLandmarks = p.Location.ProximateLandmarks
+	}
+	if p.Description.Init {
+		patched.Description = p.Description
+	}
+
+	if errAll != nil {
+		return errAll
+	}
+	*i = patched
 	return nil
 }
 func (i Incident) IsValidTransition(p any) (bool, error) {
