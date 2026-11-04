@@ -6,11 +6,14 @@ import (
 	"net/http"
 )
 
-func routes() http.Handler {
+type Handler struct {
+	incidentHandler IncidentHandler
+}
+
+func (h Handler) routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /incident", getIncidents)
-	mux.HandleFunc("GET /incident/{id}" getIncidentByID)
-	mux.HandleFunc("POST /incident" postIncident)
-	mux.HandleFunc("PATCH /incident/{id}" patchIncidentByID)
+	mux.HandleFunc("GET /incident/{id}", h.incidentHandler.getIncident)
+	mux.HandleFunc("POST /incident", h.incidentHandler.postIncident)
+	mux.HandleFunc("PATCH /incident/{id}", h.incidentHandler.patchIncident)
 	return mux
 }

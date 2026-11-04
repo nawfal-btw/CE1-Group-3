@@ -8,7 +8,6 @@ import (
 	application "github.com/nawfal-btw/CE1-Group-3/apps/internal/application"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 type IncidentBuffer struct {
@@ -28,16 +27,7 @@ func NewIncidentHandler(s application.IncidentService) *IncidentHandler {
 	return &IncidentHandler{service: s}
 }
 
-func getIncidentByID(w http.ResponseWriter, r *http.Request) {
-	idPath := r.PathValue("id")
-	_, err := strconv.Atoi(idPath)
-	if err != nil {
-		log.Println(err)
-	}
-	// build application req struct
-	// call application method?
-}
-func (iHandler IncidentHandler) postIncident(w http.ResponseWriter, r *http.Request) {
+func (h IncidentHandler) postIncident(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var iBuf IncidentBuffer
 	err := decoder.Decode(&iBuf)
@@ -45,11 +35,38 @@ func (iHandler IncidentHandler) postIncident(w http.ResponseWriter, r *http.Requ
 		log.Println(err)
 		return
 	}
-	iPatch := application.PatchIncidentCommand{
-		Type:     &iBuf.Type,
-		Status:   iBuf.Status,
-		Priority: iBuf.Priority,
+	iPatch := application.PatchIncidentTransport{
+		ID:          nil,
+		Type:        &iBuf.Type,
+		Status:      &iBuf.Status,
+		Priority:    &iBuf.Priority,
+		Location:    &iBuf.Location,
+		Description: &iBuf.Description,
 	}
-	iHandler.service.CreateIncident()
-
+	h.service.CreateIncident(r.Context(), iPatch)
+}
+func (h IncidentHandler) patchIncident(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	var iBuf IncidentBuffer
+	err := decoder.Decode(&iBuf)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	iPatch := application.PatchIncidentTransport{
+		ID:          nil,
+		Type:        &iBuf.Type,
+		Status:      &iBuf.Status,
+		Priority:    &iBuf.Priority,
+		Location:    &iBuf.Location,
+		Description: &iBuf.Description,
+	}
+	h.service.CreateIncident(r.Context(), iPatch)
+}
+func (h IncidentHandler) getIncident(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		log.Println(err)
+	}
+	h.service.GetIncident(r.Context(), id)
 }

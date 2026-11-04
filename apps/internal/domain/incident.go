@@ -137,7 +137,7 @@ func NewIncident(p IncidentPatch) (*Incident, error) {
 	i.Description = p.Description
 	return &i, nil
 }
-func (i *Incident) PatchIncident(p IncidentPatch) error {
+func PatchIncident(p IncidentPatch, i *Incident) (*Incident, error) {
 	patched := *i
 	var errAll error
 	if p.Type.Init {
@@ -151,7 +151,7 @@ func (i *Incident) PatchIncident(p IncidentPatch) error {
 		if !i.IsValidStatus(p.Status.Value) {
 			errAll = errors.Join(errAll, errors.New("Invalid Status"))
 		}
-		if valid, err := i.IsValidTransition(p.Status); !valid {
+		if valid, err := i.IsValidTransition(p.Status.Value); !valid {
 			errAll = errors.Join(errAll, err)
 		}
 		patched.Status = p.Status
@@ -174,7 +174,7 @@ func (i *Incident) PatchIncident(p IncidentPatch) error {
 		patched.Location.Address = p.Location.Address
 	}
 	if p.Location.LocationDescription.Init {
-		patched.Location.Address = p.Location.Address
+		patched.Location.LocationDescription = p.Location.LocationDescription
 	}
 	if p.Location.ProximateLandmarks.Init {
 		patched.Location.ProximateLandmarks = p.Location.ProximateLandmarks
@@ -184,10 +184,10 @@ func (i *Incident) PatchIncident(p IncidentPatch) error {
 	}
 
 	if errAll != nil {
-		return errAll
+		return &Incident{}, errAll
 	}
 	*i = patched
-	return nil
+	return i, nil
 }
 func (i Incident) IsValidTransition(p any) (bool, error) {
 	switch t := p.(type) {
@@ -244,10 +244,10 @@ func (i Incident) IsValidPriority(iPriority IncidentPriority) bool {
 }
 
 func (i Incident) IsValidLocationGIS(iLocation LocationComponent) bool {
-	if iLocation.GIS.Value.Latitude < 0.0 || iLocation.GIS.Value.Longitude < 0.0 {
+	if iLocation.GIS.Value.Latitude < -90.0 || iLocation.GIS.Value.Latitude > 90.0 {
 		return false
 	}
-	if iLocation.GIS.Value.Latitude > 180.0 || iLocation.GIS.Value.Longitude > 180.0 {
+	if iLocation.GIS.Value.Longitude < -180.0 || iLocation.GIS.Value.Longitude > 180.0 {
 		return false
 	}
 	return true

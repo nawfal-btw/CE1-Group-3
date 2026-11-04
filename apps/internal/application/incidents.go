@@ -1,21 +1,17 @@
-// This file implements incident use cases, coordinating authorization, domain validation, and
-// persistence. It does not know whether the caller was an HTTP handler or another adapter.
 package application
 
 import (
 	"context"
 	"github.com/google/uuid"
 	domain "github.com/nawfal-btw/CE1-Group-3/apps/internal/domain"
-	// repo "github.com/nawfal-btw/CE1-Group-3/apps2/internal/repository/postgres"
-	// websocket "github.com/nawfal-btw/CE1-Group-3/apps2/internal/transport/websocket"
 )
 
 type LocationBuffer struct {
-	Latitude            float64
-	Longitude           float64
-	Address             string
-	ProximateLandmarks  []string
-	LocationDescription string
+	Latitude            *float64
+	Longitude           *float64
+	Address             *string
+	ProximateLandmarks  *[]string
+	LocationDescription *string
 }
 type PatchIncidentTransport struct {
 	ID          *uuid.UUID
@@ -29,6 +25,8 @@ type PatchIncidentTransport struct {
 
 type IncidentRepository interface {
 	Create(context.Context, *domain.Incident) error
+	Patch(context.Context, *domain.Incident) error
+	Get(context.Context) (*domain.Incident, error)
 }
 type IncidentService struct {
 	incidentsRepo IncidentRepository
@@ -51,46 +49,64 @@ func (s IncidentService) CreateIncident(ctx context.Context, cmd PatchIncidentTr
 	if res := cmd.Priority; res != nil {
 		p.Priority = domain.Field[domain.IncidentPriority]{Value: domain.IncidentPriority(*res), Init: true}
 	}
-	if res := cmd.Location; res != nil {
-		loc := cmd.Location
-		p.Location = domain.LocationComponent{
-			GIS: domain.Field[domain.LocationGIS]{
-				Value: domain.LocationGIS{
-					Latitude:  loc.Latitude,
-					Longitude: loc.Longitude,
-				},
-				Init: true,
-			},
-			Address: domain.Field[string]{
-				Value: loc.Address,
-				Init:  true,
-			},
-			ProximateLandmarks: domain.Field[[]string]{
-				Value: loc.ProximateLandmarks,
-				Init:  true,
-			},
-			LocationDescription: domain.Field[string]{
-				Value: loc.LocationDescription,
-				Init:  true,
-			},
-		}
+	if res := cmd.Description; res != nil {
+		p.Description = domain.Field[string]{Value: *res, Init: true}
 	}
-	if res := cmd.Location; res != nil {
-		p.Location = *res
-	}
+	s.CreateLocation(cmd.Location, &p)
 
 	i, err := domain.NewIncident(p)
 	if err != nil {
-		return &domain.Incident{}, err
+		return nil, err
 	}
-	// TODO: interact with ORM
 	if err = s.incidentsRepo.Create(ctx, i); err != nil {
-		return &domain.Incident{}, err
+		return nil, err
 	}
 	return i, nil
 }
+
+func (s IncidentService) CreateLocation(loc LocationBuffer, p *domain.IncidentPatch) {
+	if lat, long := loc.Latitude, loc.Longitude; lat != nil && long != nil {
+		p.Location.GIS.Value.Latitude = *lat
+		p.Location.GIS.Value.Longitude = *long
+		p.Location.GIS.Init = true
+	}
+	if res := loc.Address; res != nil {
+		p.Location.Address = domain.Field[string]{Value: *res, Init: true}
+	}
+	if res := loc.LocationDescription; res != nil {
+		p.Location.LocationDescription = domain.Field[string]{Value: *res, Init: true}
+	}
+	if res := loc.ProximateLandmarks; res != nil {
+		p.Location.ProximateLandmarks = domain.Field[[]string]{Value: *res, Init: true}
+	}
+}
+
+// TODO: interact with ORM
 func (s IncidentService) PatchIncident(ctx context.Context, cmd PatchIncidentTransport) (*domain.Incident, error) {
 	// TODO: get that ORM both ways
+	i, err := s.incidentsRepo.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p := domain.IncidentPatch{}
 
-	return nil, nil
+	if res := cmd.Type; res != nil {
+		p.Type = domain.Field[domain.IncidentType]{Value: domain.IncidentType(*res), Init: true}
+	}
+	if res := cmd.Status; res != nil {
+		p.Status = domain.Field[domain.IncidentStatus]{Value: domain.IncidentStatus(*res), Init: true}
+	}
+	if res := cmd.Priority; res != nil {
+		p.Priority = domain.Field[domain.IncidentPriority]{Value: domain.IncidentPriority(*res), Init: true}
+	}
+	if res := cmd.Description; res != nil {
+		p.Description = domain.Field[string]{Value: *res, Init: true}
+	}
+	s.CreateLocation(cmd.Location, &p)
+
+	i, err = domain.PatchIncident(p, i)
+	if err != nil {
+		return nil, err
+	}
+	return i, nil
 }
