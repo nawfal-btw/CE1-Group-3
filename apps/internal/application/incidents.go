@@ -26,7 +26,7 @@ type PatchIncidentTransport struct {
 type IncidentRepository interface {
 	Create(context.Context, *domain.Incident) error
 	Patch(context.Context, *domain.Incident) error
-	Get(context.Context) (*domain.Incident, error)
+	Get(context.Context, uuid.UUID) (*domain.Incident, error)
 }
 type IncidentService struct {
 	incidentsRepo IncidentRepository
@@ -52,7 +52,7 @@ func (s IncidentService) CreateIncident(ctx context.Context, cmd PatchIncidentTr
 	if res := cmd.Description; res != nil {
 		p.Description = domain.Field[string]{Value: *res, Init: true}
 	}
-	s.CreateLocation(cmd.Location, &p)
+	s.CreateLocation(*cmd.Location, &p)
 
 	i, err := domain.NewIncident(p)
 	if err != nil {
@@ -102,11 +102,17 @@ func (s IncidentService) PatchIncident(ctx context.Context, cmd PatchIncidentTra
 	if res := cmd.Description; res != nil {
 		p.Description = domain.Field[string]{Value: *res, Init: true}
 	}
-	s.CreateLocation(cmd.Location, &p)
+	s.CreateLocation(*cmd.Location, &p)
 
 	i, err = domain.PatchIncident(p, i)
 	if err != nil {
 		return nil, err
 	}
 	return i, nil
+}
+
+// func ()
+func (s IncidentService) GetIncident(ctx context.Context, id uuid.UUID) {
+	i, err := s.incidentsRepo.Get(ctx, id)
+	i.Val
 }
