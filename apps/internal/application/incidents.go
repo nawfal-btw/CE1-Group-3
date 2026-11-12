@@ -80,7 +80,7 @@ func NewIncidentService(incidents IncidentRepository, authorizer IncidentAuthori
 }
 
 func (s IncidentService) PostIncident(ctx context.Context, identity Identity, input IncidentInput) (*Incident, error) {
-	s.logger.InfoContext(ctx, "posting incident", "subject_id", identity.SubjectID)
+	s.logger.DebugContext(ctx, "posting incident", "subject_id", identity.SubjectID)
 	if err := s.authorizer.AuthorizePostIncident(ctx, identity); err != nil {
 		s.logger.WarnContext(ctx, "incident post authorization failed", "error", err)
 		return nil, err

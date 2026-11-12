@@ -1,4 +1,4 @@
-package http
+package apihttp
 
 import (
 	"encoding/json"
@@ -79,20 +79,28 @@ func NewIncidentHandler(service application.IncidentService, authenticator Incid
 }
 
 func (h IncidentHandler) PostIncident(w http.ResponseWriter, r *http.Request) {
-	h.logger.InfoContext(r.Context(), "received post incident request")
+	h.logger.DebugContext(r.Context(), "received post incident request")
 	identity, ok := h.authenticateIncident(w, r)
 	if !ok {
+
 		return
 	}
-	input, ok := decodeIncidentInput(w, r)
+	input, ok := decodeIncidentInput(h.logger, w, r)
 	if !ok {
 		return
 	}
 	incident, err := h.service.PostIncident(r.Context(), identity, input)
 	if err != nil {
-		writeError(w, err)
+		status := writeError(w, err)
+		if status == http.StatusInternalServerError {
+			h.logger.ErrorContext(r.Context(), "incident post failed", "error", err, "status", status)
+		} else {
+			h.logger.WarnContext(r.Context(), "incident post rejected", "error", err, "status", status)
+		}
 		return
 	}
+
+	h.logger.InfoContext(r.Context(), "incident created", "incident_id", incident.ID, "status", http.StatusCreated)
 	writeJSON(w, http.StatusCreated, toIncidentResponse(incident))
 }
 
@@ -106,7 +114,7 @@ func (h IncidentHandler) PatchIncident(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	input, ok := decodeIncidentInput(w, r)
+	input, ok := decodeIncidentInput(h.logger, w, r)
 	if !ok {
 		return
 	}
@@ -133,26 +141,29 @@ func (h IncidentHandler) GetIncident(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	h.logger.InfoContext(r.Context(), "incident retrieved", "incident_id", id, "status", http.StatusOK)
 	writeJSON(w, http.StatusOK, toIncidentResponse(incident))
 }
 
 func (h IncidentHandler) authenticateIncident(w http.ResponseWriter, r *http.Request) (application.Identity, bool) {
 	identity, err := h.authenticator.AuthenticateIncident(r)
 	if err != nil {
-		h.logger.WarnContext(r.Context(), "incident authentication failed", "error", err)
+		h.logger.WarnContext(r.Context(), "incident authentication failed", "error", err, "status", http.StatusUnauthorized)
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return application.Identity{}, false
 	}
 	return identity, true
 }
 
-func decodeIncidentInput(w http.ResponseWriter, r *http.Request) (application.IncidentInput, bool) {
+func decodeIncidentInput(logger *slog.Logger, w http.ResponseWriter, r *http.Request) (application.IncidentInput, bool) {
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	var request incidentRequest
 	if err := decoder.Decode(&request); err != nil {
-		writeError(w, err)
+		status := http.StatusBadRequest
+		http.Error(w, err.Error(), status)
+		logger.WarnContext(r.Context(), "incident json rejected", "error", err, "status", status)
 		return application.IncidentInput{}, false
 	}
 	return toIncidentInput(request), true
@@ -208,7 +219,7 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 
-func writeError(w http.ResponseWriter, err error) {
+func writeError(w http.ResponseWriter, err error) int {
 	status := http.StatusInternalServerError
 	if errors.Is(err, application.ErrInvalidIncident) {
 		status = http.StatusBadRequest
@@ -217,4 +228,5 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusForbidden
 	}
 	http.Error(w, err.Error(), status)
+	return status
 }

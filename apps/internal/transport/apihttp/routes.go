@@ -1,6 +1,6 @@
 // This file registers versioned HTTP routes and connects them to handlers. It defines the API
 // surface, but delegates request behavior to handlers and application services.
-package http
+package apihttp
 
 import (
 	"net/http"
@@ -13,8 +13,11 @@ type Handler struct {
 	auxHandler      AuxHandler
 }
 
-func NewHandler() *Handler {
-	return &Handler{}
+func NewHandler(incidents IncidentHandler) *Handler {
+	return &Handler{
+		incidentHandler: incidents,
+		auxHandler:      AuxHandler{},
+	}
 }
 
 func (h Handler) Routes() http.Handler {

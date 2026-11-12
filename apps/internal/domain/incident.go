@@ -84,7 +84,7 @@ func ValidateIncident(ctx context.Context, logger *slog.Logger, incident *Incide
 }
 
 func PostIncident(ctx context.Context, logger *slog.Logger, patch IncidentPatch) (*Incident, error) {
-	logger.InfoContext(ctx, "posting incident")
+	logger.DebugContext(ctx, "posting incident")
 	incident := &Incident{
 		ID:          IncidentID(uuid.New()),
 		Type:        patch.Type,

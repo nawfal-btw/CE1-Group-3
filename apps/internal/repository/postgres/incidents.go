@@ -22,7 +22,7 @@ func NewIncidentRepo(db *gorm.DB, logger *slog.Logger) *IncidentRepo {
 }
 
 func (r *IncidentRepo) PostIncident(ctx context.Context, incident *domain.Incident) error {
-	r.logger.InfoContext(ctx, "storing incident", "incident_id", incident.ID)
+	r.logger.DebugContext(ctx, "storing incident", "incident_id", incident.ID)
 	row := incidentToRow(incident)
 	return r.db.WithContext(ctx).Create(&row).Error
 }
