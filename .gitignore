@@ -1,2 +1,8 @@
 # Local Kubernetes secrets
 k8s/postgres-secret.yaml
+
+# Local authentication infrastructure secrets and exports
+infra/auth/.env
+infra/auth/.env.*
+!infra/auth/.env.example
+infra/auth/local/

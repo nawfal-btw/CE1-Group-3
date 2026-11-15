@@ -1,0 +1,64 @@
+name: ce1-auth-dev
+
+services:
+  postgres:
+    image: postgres:17.11-bookworm
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD in infra/auth/.env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - auth
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD in infra/auth/.env}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${AUTH_ADMIN_USERNAME:-local-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${AUTH_ADMIN_PASSWORD:?Set AUTH_ADMIN_PASSWORD in infra/auth/.env}
+      KC_HOSTNAME: http://localhost:8081
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - ./keycloak/ce1-dev-realm.json:/opt/keycloak/data/import/ce1-dev-realm.json:ro
+    networks:
+      - auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # The official image has Bash but no curl. Read the HTTP status line
+      # using Bash built-ins; management port 9000 stays unpublished.
+      test:
+        - CMD
+        - /bin/bash
+        - -ec
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000;
+          printf 'HEAD /health/ready HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3;
+          IFS= read -r status <&3;
+          [[ "$$status" == *" 200 "* ]]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+
+networks:
+  auth:
+
+volumes:
+  postgres_data:

@@ -1,0 +1,30 @@
+{
+  "realm": "ce1-dev",
+  "displayName": "CE1 Emergency Coordination - Local Development",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "loginWithEmailAllowed": false,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "administrator",
+        "description": "Provisional application administrator; grants no Keycloak administration privileges."
+      },
+      {
+        "name": "dispatcher",
+        "description": "Provisional dispatcher role; permissions remain to be agreed and enforced by the application."
+      },
+      {
+        "name": "operator",
+        "description": "Provisional operator role; permissions remain to be agreed and enforced by the application."
+      },
+      {
+        "name": "responder",
+        "description": "Provisional responder role; does not establish device identity or vehicle association."
+      }
+    ]
+  }
+}
