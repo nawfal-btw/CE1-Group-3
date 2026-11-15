@@ -1,231 +1,169 @@
-// This file defines the incident entity and its permitted lifecycle operations. It contains
-// business invariants, but no HTTP, database, or serialization concerns.
 package domain
 
 import (
+	"context"
 	"errors"
-	"time"
+	"log/slog"
+
+	"github.com/google/uuid"
 )
 
+var ErrInvalidIncident = errors.New("invalid incident")
+
 type (
-	IncidentID       int64
+	IncidentID       uuid.UUID
 	IncidentType     int16
 	IncidentPriority int8
 	IncidentStatus   int8
 )
 
-// This should not be hardcoded but derived from a file
-const (
-	PRIORITYMIN IncidentPriority = iota
-	_1
-	_2
-	_3
-	_4
-	_5
-	PRIORITYMAX
-)
-
-// This should not be hardcoded but derived from a file
-const (
-	STATUSMIN IncidentStatus = iota
-	PLANNING
-	IN_PROGRESS
-	RESOLVED
-	CANCELLED
-	STATUSMAX
-)
-
-// This should not be hardcoded but derived from a file
-const (
-	TYPEMIN IncidentType = iota
-	_NONEMERG
-	_911H
-	_911OPN
-	_ABDOM
-	_ABDUCTF
-	_ABDUCTNF
-	_ABUSE
-	_ACCIND
-	_ACTSHOOT
-	_ADMIN
-	_AIR
-	_AIRINC
-	_ALIEN
-	_ALLERGIC
-	_ALMA
-	_ALMB
-	_ALMH
-	TYPEMAX
-)
-
-type Field[T any] struct {
-	Value T
-	Init  bool
+// Option separates an omitted property from a property explicitly set to its zero value.
+// A nil Value denotes the property's zero value. Set=false means the property is
+// uninitialized on an Incident or must not be applied by a patch.
+type Option[T any] struct {
+	Value *T
+	Set   bool
 }
+
 type Incident struct {
-	ID          Field[IncidentID]
-	Type        Field[IncidentType]
-	Status      Field[IncidentStatus]
-	Priority    Field[IncidentPriority]
-	Location    LocationComponent
-	Description string
-
-	CreatedAtUTC Field[time.Time]
-	UpdatedAtUTC Field[time.Time]
-	ClosedAtUTC  Field[time.Time]
-
-	// Owner        AgencyRef
-	// Calls        []CallComponent
-	// Allocations  []Allocation
-	// ExternalRefs []LocalIncident
-	Version string
+	ID          IncidentID
+	Type        Option[IncidentType]
+	Status      Option[IncidentStatus]
+	Priority    Option[IncidentPriority]
+	Location    Location
+	Description Option[string]
 }
+
 type IncidentPatch struct {
-	Type        Field[IncidentType]
-	Status      Field[IncidentStatus]
-	Priority    Field[IncidentPriority]
-	Location    LocationComponent
-	Description string
-
-	// Owner        AgencyRef
+	Type        Option[IncidentType]
+	Status      Option[IncidentStatus]
+	Priority    Option[IncidentPriority]
+	Location    Location
+	Description Option[string]
 }
 
-type LocationGIS struct {
-	Latitude  float64
-	Longitude float64
-}
-type LocationComponent struct {
-	GIS                 Field[LocationGIS]
-	Address             string
-	ProximateLandmarks  []string
-	LocationDescription string
+type Location struct {
+	Latitude            Option[float64]
+	Longitude           Option[float64]
+	Address             Option[string]
+	LocationDescription Option[string]
 }
 
-func NewIncident(p IncidentPatch) (*Incident, error) {
-	var i Incident
-	// is it init
-	if p.Type.Init {
-		// is it valid -> Y: Valid
-		if !i.IsValidType(p.Type.Value) {
-			return &Incident{}, errors.New("Invalid Type")
+// ValidateIncident is the single place for incident field validation. Value-specific
+// rules can be added to the validate functions as the accepted values are defined.
+func ValidateIncident(ctx context.Context, logger *slog.Logger, incident *Incident) error {
+	logger.DebugContext(ctx, "validating incident")
+	if incident == nil {
+		logger.WarnContext(ctx, "incident validation failed", "reason", "incident is nil")
+		return ErrInvalidIncident
+	}
+	if uuid.UUID(incident.ID) == uuid.Nil {
+		logger.WarnContext(ctx, "incident validation failed", "reason", "incident ID is required")
+		return errors.Join(ErrInvalidIncident, errors.New("incident ID is required"))
+	}
+	if incident.Type.Set && incident.Type.Value != nil {
+		if err := validateIncidentType(*incident.Type.Value); err != nil {
+			return errors.Join(ErrInvalidIncident, err)
 		}
 	}
-	if p.Status.Init {
-		// is it valid -> Y: Valid
-		if !i.IsValidStatus(p.Status.Value) {
-			return &Incident{}, errors.New("Invalid Status")
+	if incident.Status.Set && incident.Status.Value != nil {
+		if err := validateIncidentStatus(*incident.Status.Value); err != nil {
+			return errors.Join(ErrInvalidIncident, err)
 		}
 	}
-	if p.Priority.Init {
-		// is it valid -> Y: Valid
-		if !i.IsValidPriority(p.Priority.Value) {
-			return &Incident{}, errors.New("Invalid Priority")
+	if incident.Priority.Set && incident.Priority.Value != nil {
+		if err := validateIncidentPriority(*incident.Priority.Value); err != nil {
+			return errors.Join(ErrInvalidIncident, err)
 		}
 	}
-	if p.Location.GIS.Init {
-		// is it valid -> Y: Valid
-		if !i.IsValidLocationGIS(p.Location) {
-			return &Incident{}, errors.New("Invalid Location")
-		}
+	if err := validateLocation(incident.Location); err != nil {
+		logger.WarnContext(ctx, "incident validation failed", "reason", err)
+		return errors.Join(ErrInvalidIncident, err)
 	}
-	i.Type = p.Type
-	i.Status = p.Status
-	i.Priority = p.Priority
-	i.Location = p.Location
-	i.Description = p.Description
-	return &i, nil
-}
-func (i *Incident) PatchIncident(p IncidentPatch) error {
-	if p.Type.Init {
-		if !i.IsValidType(p.Type.Value) {
-			return errors.New("Invalid Type")
-		}
-	}
-	if p.Status.Init {
-		if !i.IsValidStatus(p.Status.Value) {
-			return errors.New("Invalid Status")
-		}
-		if isValid, err := i.IsValidTransition(p.Status); !isValid {
-			return err
-		}
-	}
-	if p.Priority.Init {
-		if !i.IsValidPriority(p.Priority.Value) {
-			return errors.New("Invalid Priority")
-		}
-	}
-	if p.Location.GIS.Init {
-		if !i.IsValidLocationGIS(p.Location) {
-			return errors.New("Invalid Location")
-		}
-	}
-	i.Type = p.Type
-	i.Status = p.Status
-	i.Priority = p.Priority
-	i.Location = p.Location
-	i.Description = p.Description
 	return nil
 }
-func (i Incident) IsValidTransition(p any) (bool, error) {
-	switch t := p.(type) {
-	case IncidentStatus:
-		isValid, err := i.IsValidStatusTransition(t)
-		return isValid, err
-	default:
-		return false, errors.New("Unsupported transition check")
-	}
 
-}
-func (i Incident) IsValidStatusTransition(s IncidentStatus) (bool, error) {
-	switch i.Status.Value {
-	case PLANNING:
-		if s == RESOLVED {
-			return false, errors.New("Invalid Status Transition PLANNING -> RESOLVED")
-		}
-	case IN_PROGRESS:
-		if s == PLANNING {
-			return false, errors.New("Invalid Status Transition IN PROGRESS -> PLANNING")
-		}
-	case CANCELLED:
-		if s == RESOLVED {
-			return false, errors.New("Invalid Status Transition IN CANCELLED -> RESOLVED")
-		}
-	case RESOLVED:
-		if s == CANCELLED {
-			return false, errors.New("Invalid Status Transition IN RESOLVED -> CANCELLED")
-		}
-	default:
-		return false, errors.New("Invalid Status slipped through...")
+func PostIncident(ctx context.Context, logger *slog.Logger, patch IncidentPatch) (*Incident, error) {
+	logger.InfoContext(ctx, "posting incident")
+	incident := &Incident{
+		ID:          IncidentID(uuid.New()),
+		Type:        patch.Type,
+		Status:      patch.Status,
+		Priority:    patch.Priority,
+		Location:    patch.Location,
+		Description: patch.Description,
 	}
-	return true, nil
-
+	if err := ValidateIncident(ctx, logger, incident); err != nil {
+		return nil, err
+	}
+	return incident, nil
 }
 
-func (i Incident) IsValidType(iType IncidentType) bool {
-	if iType <= TYPEMIN || iType >= TYPEMAX {
-		return false
+func PatchIncident(ctx context.Context, logger *slog.Logger, patch IncidentPatch, incident *Incident) (*Incident, error) {
+	logger.InfoContext(ctx, "patching incident")
+	if err := ValidateIncident(ctx, logger, incident); err != nil {
+		return nil, err
 	}
-	return true
-}
-func (i Incident) IsValidStatus(iStatus IncidentStatus) bool {
-	if iStatus <= STATUSMIN || iStatus >= STATUSMAX {
-		return false
+
+	// Copies current incident and overrides only set values
+	patched := *incident
+	if patch.Type.Set {
+		patched.Type = patch.Type
 	}
-	return true
-}
-func (i Incident) IsValidPriority(iPriority IncidentPriority) bool {
-	if iPriority <= PRIORITYMIN || iPriority >= PRIORITYMAX {
-		return false
+	if patch.Status.Set {
+		patched.Status = patch.Status
 	}
-	return true
+	if patch.Priority.Set {
+		patched.Priority = patch.Priority
+	}
+	if patch.Location.Latitude.Set {
+		patched.Location.Latitude = patch.Location.Latitude
+	}
+	if patch.Location.Longitude.Set {
+		patched.Location.Longitude = patch.Location.Longitude
+	}
+	if patch.Location.Address.Set {
+		patched.Location.Address = patch.Location.Address
+	}
+	if patch.Location.LocationDescription.Set {
+		patched.Location.LocationDescription = patch.Location.LocationDescription
+	}
+	if patch.Description.Set {
+		patched.Description = patch.Description
+	}
+
+	if err := ValidateIncident(ctx, logger, &patched); err != nil {
+		return nil, err
+	}
+	return &patched, nil
 }
 
-func (i Incident) IsValidLocationGIS(iLocation LocationComponent) bool {
-	if iLocation.GIS.Value.Latitude < 0.0 || iLocation.GIS.Value.Longitude < 0.0 {
-		return false
+func GetIncident(ctx context.Context, logger *slog.Logger, incident *Incident) (*Incident, error) {
+	logger.InfoContext(ctx, "getting incident")
+	if err := ValidateIncident(ctx, logger, incident); err != nil {
+		return nil, err
 	}
-	if iLocation.GIS.Value.Latitude > 180.0 || iLocation.GIS.Value.Longitude > 180.0 {
-		return false
+	return incident, nil
+}
+
+func validateIncidentType(IncidentType) error {
+	return nil
+}
+
+func validateIncidentStatus(IncidentStatus) error {
+	return nil
+}
+
+func validateIncidentPriority(IncidentPriority) error {
+	return nil
+}
+
+func validateLocation(location Location) error {
+	if location.Latitude.Set != location.Longitude.Set {
+		return errors.New("latitude and longitude must be set together")
 	}
-	return true
+	if location.Latitude.Set && (location.Latitude.Value == nil || location.Longitude.Value == nil) {
+		return errors.New("latitude and longitude must both have values")
+	}
+	return nil
 }
