@@ -28,11 +28,15 @@ services:
       KC_DB_PASSWORD: ${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD in infra/auth/.env}
       KC_BOOTSTRAP_ADMIN_USERNAME: ${AUTH_ADMIN_USERNAME:-local-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${AUTH_ADMIN_PASSWORD:?Set AUTH_ADMIN_PASSWORD in infra/auth/.env}
-      KC_HOSTNAME: http://localhost:8081
+      KC_HOSTNAME: ${AUTH_KEYCLOAK_URL:-http://localhost:8081}
+      AUTH_BFF_CLIENT_SECRET: ${AUTH_BFF_CLIENT_SECRET:?Supply AUTH_BFF_CLIENT_SECRET for native realm import}
+      AUTH_BFF_REDIRECT_URI: ${AUTH_BFF_REDIRECT_URI:-http://localhost:8082/auth/callback}
+      AUTH_WEBAUTHN_RP_ID: ${AUTH_WEBAUTHN_RP_ID:-localhost}
+      AUTH_SSL_REQUIRED: ${AUTH_SSL_REQUIRED:-none}
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
     ports:
-      - "127.0.0.1:8081:8080"
+      - "127.0.0.1:${AUTH_HTTP_PORT:-8081}:8080"
     volumes:
       - ./keycloak/ce1-dev-realm.json:/opt/keycloak/data/import/ce1-dev-realm.json:ro
     networks:

@@ -1,192 +1,253 @@
-# Local authentication infrastructure
+# Primary local authentication environment
 
-This isolated Compose project runs Keycloak and its own PostgreSQL database. It
-does not run or alter the application, legacy stack, or Kubernetes. Run commands
-below in PowerShell from `infra/auth` unless stated otherwise.
+**Use `ce1-auth-local` for local development.** It initializes Keycloak directly
+from the canonical realm JSON; no PowerShell initialization script is required.
 
-## Versions and boundaries
+Run every command below from `infra/auth`. Always include the explicit project
+and environment file: the shared Compose file retains its legacy default project
+name, so a bare `docker compose up` does not select the primary environment.
 
-- Keycloak: `quay.io/keycloak/keycloak:26.8.1`.
-- PostgreSQL: `postgres:17.11-bookworm`. PostgreSQL 17 is supported by Keycloak.
-- Compose project: `ce1-auth-dev`, with its own network and named volume
-  `ce1-auth-dev_postgres_data`.
-- Only Keycloak is published: `127.0.0.1:8081` forwards to container port 8080.
-  PostgreSQL and Keycloak's management/health/metrics port 9000 are not published.
-- Canonical hostname: `http://localhost:8081`. Use this consistently for browser
-  access and OIDC issuer matching; `127.0.0.1` is the bind address, not the issuer.
+## Connection and storage
 
-Image tags pin release versions, not immutable image digests. Review security
-updates and test upgrades deliberately. Never point this stack at an application
-database or reuse an unrelated database volume.
-
-## First-time configuration
-
-Prerequisites: Docker Desktop running with Linux containers and Docker Compose.
-No native PostgreSQL, Keycloak, Java, or Kubernetes installation is needed.
-
-From the repository root:
-
-```powershell
-Set-Location infra/auth
-docker context show
-docker info --format '{{.OperatingSystem}} | {{.OSType}} | {{.ServerVersion}}'
-docker compose version
-```
-
-Confirm the server is Docker Desktop with `linux` container type. If the engine
-cannot be reached, start Docker Desktop and wait for readiness before continuing.
-Do not change contexts or start an unrelated Docker engine automatically.
-
-Create `.env` only if it does not already exist:
-
-```powershell
-if (Test-Path -LiteralPath .env) { throw '.env already exists; preserve it.' }
-Copy-Item -LiteralPath .env.example -Destination .env
-```
-
-Set `AUTH_DB_PASSWORD` and `AUTH_ADMIN_PASSWORD` to different random passwords in
-`.env`; leave `AUTH_ADMIN_USERNAME=local-admin` unless a different local name is
-needed. Empty passwords intentionally fail Compose validation. Generate each
-password separately with this PowerShell-compatible snippet, then paste it into
-the local file (do not share the output):
-
-```powershell
-$bytes = New-Object byte[] 32
-$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
-[Convert]::ToBase64String($bytes)
-```
-
-`.env`, `.env.*` (except `.env.example`), and `local/` are ignored by Git. Use
-`local/` for sensitive local exports if needed. The bootstrap admin is a local
-Keycloak administrator in the `master` realm, not a dispatcher test identity.
-Credentials are not included in the realm JSON. Keep filesystem access restricted
-and never reuse these credentials outside this disposable environment.
-
-## Validate and start
-
-```powershell
-docker compose config --quiet
-if ($LASTEXITCODE -ne 0) { throw 'Compose validation failed.' }
-docker compose up -d --wait --wait-timeout 240
-if ($LASTEXITCODE -ne 0) { throw 'Startup failed; inspect status and logs.' }
-docker compose ps
-```
-
-The first start pulls images, initializes PostgreSQL, prepares Keycloak, and
-imports `ce1-dev`. PostgreSQL readiness gates Keycloak startup. Keycloak's
-healthcheck requests `/health/ready` on its internal management port using Bash
-built-ins because the official image does not include curl. Metrics are enabled
-so readiness can include database health. No extra image or software is installed.
-
-Do not share `docker compose config` without `--quiet`, `config --environment`,
-full `docker inspect`, or credential-bearing diagnostic output: they can expose
-resolved passwords. `.env` is a development convenience, not a secret manager;
-Docker administrators can inspect container environment variables.
-
-Open <http://localhost:8081/admin/> and log in using the local bootstrap admin.
-Select realm **ce1-dev** and check **Realm roles**:
-
-| Role | Meaning in this phase |
+| Item | Primary environment |
 | --- | --- |
-| `administrator` | Provisional application administrator, not a Keycloak administrator |
-| `dispatcher` | Provisional dispatcher classification |
-| `operator` | Provisional operator classification |
-| `responder` | Provisional responder classification; no device or vehicle identity |
+| Compose project | `ce1-auth-local` |
+| Private environment file | `local/ce1-auth-local.env` |
+| Keycloak Admin Console | <http://localhost:8083/admin/> |
+| Canonical Keycloak URL | `http://localhost:8083` |
+| Exact OIDC issuer | `http://localhost:8083/realms/ce1-dev` |
+| Realm / confidential client | `ce1-dev` / `ce1-bff-dev` |
+| Reserved BFF callback | `http://localhost:8082/auth/callback` |
+| WebAuthn RP ID | `localhost` |
+| Host binding | `127.0.0.1:8083` -> Keycloak container port 8080 |
+| PostgreSQL volume | `ce1-auth-local_postgres_data` |
+| Compose network | `ce1-auth-local_auth` |
 
-These roles grant no implemented API permissions and are not automatically
-assigned to users. Application users, custom OIDC clients, passkeys, device
-credentials, token middleware, sessions, and resource authorization are deferred.
-Keycloak creates its normal built-in clients and default realm roles.
+PostgreSQL and Keycloak management port 9000 have no host-published ports.
+The pinned images are Keycloak `26.8.1` and PostgreSQL `17.11-bookworm`.
+The callback is reserved for Phase 2B; no Go callback handler exists yet.
 
-## Verify
+The future BFF must use the exact issuer above, client `ce1-bff-dev`, and the
+`AUTH_BFF_CLIENT_SECRET` from the primary environment file. Its callback must
+match the registered URI exactly. No backend files are configured in this phase.
 
-```powershell
-docker compose ps
-docker compose exec -T postgres pg_isready -h 127.0.0.1 -U keycloak -d keycloak
-powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\verify.ps1
-```
+## Start, stop and restart
 
-The script checks discovery's exact issuer, advertised endpoints and PKCE S256;
-fetches JWKS; checks RSA signing keys and absence of private/symmetric key
-parameters; and confirms an unknown realm returns HTTP 404. It obtains no tokens
-and changes no server state. `RemoteSigned` above applies only to this child
-PowerShell process so a locally created script can run; it does not change user
-or machine policy. If organizational policy prevents scripts, use the read-only
-requests below; do not change persistent policy to run this project.
+Docker Desktop must be running with Linux containers. Verify connectivity first:
 
-Manual endpoint checks:
+~~~sh
+docker info --format '{{.OperatingSystem}} | {{.OSType}}'
+~~~
 
-```powershell
-$issuer = 'http://localhost:8081/realms/ce1-dev'
-$discovery = Invoke-RestMethod "$issuer/.well-known/openid-configuration"
-$discovery | Select-Object issuer, authorization_endpoint, token_endpoint, jwks_uri
-$jwks = Invoke-RestMethod $discovery.jwks_uri
-$jwks.keys | Select-Object kid, kty, use, alg
-```
+Validate and start the primary project:
 
-Discovery describes the identity provider's OIDC endpoints. JWKS publishes public
-verification keys; successful retrieval does not prove application JWT validation
-or authorization. Those are later phases.
+~~~sh
+docker compose --env-file local/ce1-auth-local.env -p ce1-auth-local config --quiet
+docker compose --env-file local/ce1-auth-local.env -p ce1-auth-local up -d --wait --wait-timeout 240
+docker compose --env-file local/ce1-auth-local.env -p ce1-auth-local ps
+~~~
 
-## Shutdown, restart, and persistence
+Stop both primary containers, preserving their storage:
 
-```powershell
-docker compose stop
-docker compose start --wait --wait-timeout 240
-```
+~~~sh
+docker compose --env-file local/ce1-auth-local.env -p ce1-auth-local stop
+~~~
 
-`stop` preserves containers and the database volume. PostgreSQL holds realm
-configuration, users, and signing keys; no separate Keycloak data volume is
-required. If configuration changes require container recreation, use the startup
-`up` command again after reviewing the change.
+Start existing stopped containers and wait for health:
 
-For container/network teardown, run `docker compose down` only after deciding to
-remove this project's containers/network (agents require explicit approval).
-Ordinary `down` preserves the named database volume. Do not add `--volumes` or
-use volume/system prune commands: they can permanently erase identities and keys.
+~~~sh
+docker compose --env-file local/ce1-auth-local.env -p ce1-auth-local start --wait --wait-timeout 240
+~~~
 
-Startup import **skips an existing realm**. Editing the JSON does not update the
-persisted realm. Do not reset the database to apply changes. Plan a deliberate
-Admin Console/API update or separately approved disposable reset. Bootstrap
-credentials also apply only during initial administrator creation; editing `.env`
-does not rotate an existing administrator password. Change that password in
-Keycloak, and coordinate the local file separately.
+For a restart with a readiness check, run the stop command followed by the start
+command above. This is the sequence used for the persistence test.
 
-## Troubleshooting
+Do not use `down --volumes`, volume prune, or database reset commands. No cleanup
+of the retained environments is needed to operate this project.
 
-| Symptom | Action |
-| --- | --- |
-| Docker named pipe missing | Start Docker Desktop, select Linux containers, and repeat `docker info`. |
-| Required environment variable error | Confirm `.env` exists in this directory with both nonempty passwords. |
-| Port 8081 in use | Inspect `Get-NetTCPConnection -LocalPort 8081 -State Listen`; do not stop its owner automatically. A port change also requires updating the canonical hostname, verification script, and future clients. |
-| Pull/DNS/proxy failure | Check Docker Desktop connectivity/proxy settings and retry; do not disable TLS verification. |
-| Startup timeout or unhealthy container | Run `docker compose ps` and `docker compose logs --tail 100 postgres keycloak`; review locally before sharing logs. Initial image preparation can take time. |
-| PostgreSQL authentication fails after `.env` edit | Initial volume credentials persist; changing the environment does not change the database password. Coordinate an explicit password rotation rather than deleting the volume. |
-| Realm discovery returns 404 | Check Keycloak logs for import errors and ensure `ce1-dev` is selected/enabled. Existing realms are not overwritten by startup import. |
-| Unexpected issuer or browser redirects | Use `http://localhost:8081`, not container DNS names or a different hostname. |
-| Admin login fails after `.env` edit | Existing administrators are not recreated. Use the existing credential or plan recovery; do not erase the database. |
+## Credentials and fresh setup on another machine
 
-## Development-only limitations
+This machine's primary environment file already exists. **Do not overwrite it.**
+It contains an independent database password, administrator password, and BFF
+client secret generated with the operating system's cryptographic random-number
+generator. These values differ from both previous environments.
 
-`start-dev`, HTTP, realm `sslRequired: none`, and unencrypted database traffic
-inside the Compose network are local-development shortcuts. Loopback publishing
-reduces remote exposure but does not protect against other local users or a
-Docker administrator. The database initialization account has elevated database
-privileges; production needs deliberate database privilege and secret management.
+Open the file privately in your editor to obtain the administrator credentials.
+The administrator username is `ce1-local-admin`. It is a Keycloak administrator
+in the master realm, separate from the application `administrator` role.
 
-Do not expose this stack on LAN/Tailscale, use real incident data, or treat it as
-production authentication. Shared deployment requires HTTPS and trusted hostnames,
-production Keycloak startup/configuration, appropriate database transport and
-privileges, managed secrets, backups/recovery, and an access-control review.
-Future passkey enrollment needs a stable origin/RP ID; choose that before enrolling
-credentials. This phase does not enforce passwordless user or device authentication.
+On another machine, create a new `local/ce1-auth-local.env` using `.env.example`
+as a reference and generate three new independent secrets. Do not copy another
+developer's credentials. Set the following nonsecret values explicitly, because
+the example and Compose fallbacks retain the historical port 8081:
+
+~~~dotenv
+AUTH_ADMIN_USERNAME=ce1-local-admin
+AUTH_HTTP_PORT=8083
+AUTH_KEYCLOAK_URL=http://localhost:8083
+AUTH_BFF_REDIRECT_URI=http://localhost:8082/auth/callback
+AUTH_WEBAUTHN_RP_ID=localhost
+AUTH_SSL_REQUIRED=none
+~~~
+
+Also supply nonempty `AUTH_DB_PASSWORD`, `AUTH_ADMIN_PASSWORD` and
+`AUTH_BFF_CLIENT_SECRET`. The future BFF needs the same client secret. Keep it
+private; changing the environment file does not rotate an already imported secret.
+
+The entire `local/` directory is ignored by Git. Verify that protection:
+
+~~~sh
+git check-ignore infra/auth/local/ce1-auth-local.env
+~~~
+
+Run that Git command from the repository root. Do not share secret files, resolved
+Compose configuration, full Docker inspection, shell tracing/transcripts, or
+credential-bearing exports. Local environment files are plaintext development
+storage; Docker administrators can inspect container environment variables.
+
+## Native realm initialization
+
+`keycloak/ce1-dev-realm.json` is the single configuration source. It defines:
+
+- All four application roles.
+- Confidential `ce1-bff-dev` with Code Flow and mandatory PKCE S256.
+- Exact callback restrictions, disabled unnecessary grants and restricted scopes.
+- Required Username Form -> WebAuthn Passwordless Authenticator, bound only to
+  the BFF client; the realm's default browser flow remains unchanged.
+- Required user verification/discoverable credentials, ES256/RS256, compatible
+  platform/roaming authenticators, registration actions and minimal claim mappings.
+
+Compose mounts this file read-only into `/opt/keycloak/data/import` and runs
+Keycloak with `--import-realm`. Keycloak resolves native environment placeholders
+for the BFF secret, callback, RP ID and realm TLS policy. No host script, Python,
+Job, init container or additional configuration tool initializes the realm.
+
+A fresh database imports the definition. On restart, the existing realm is
+skipped and PostgreSQL preserves configuration, users, credentials and signing
+keys. Editing JSON or import-time environment values does not update an existing
+realm. Use a separately reviewed administrative change rather than deleting data.
+
+The seed contains no application users, bootstrap user passwords, private keys or
+existing signing-key exports. The bootstrap master administrator comes from the
+private environment file.
+
+## Verification
+
+The existing optional verifier supports the native-imported primary environment:
+
+~~~powershell
+powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\verify-phase2a.ps1 -ImportedRealm -ServerUrl http://localhost:8083 -EnvironmentFile .\local\ce1-auth-local.env
+~~~
+
+This performs configuration readback and negative protocol tests; it does not
+initialize the realm or enroll a passkey. `RemoteSigned` applies only to the child
+process. Older utilities default to the historical `.env` and port 8081; use the
+explicit primary command here. Do not run the legacy API setup utility as a
+startup hook for an imported realm.
+
+Optional direct discovery check:
+
+~~~powershell
+$discovery = Invoke-RestMethod 'http://localhost:8083/realms/ce1-dev/.well-known/openid-configuration'
+if ($discovery.issuer -cne 'http://localhost:8083/realms/ce1-dev') {
+    throw 'Unexpected issuer.'
+}
+~~~
+
+Verified for this primary environment:
+
+- Fresh native import, health checks, loopback binding and separate PostgreSQL volume.
+- Exact discovery issuer and public JWKS.
+- Imported BFF secret matches the private environment file, without printing it.
+- Roles, claim mappings, role scopes, WebAuthn policy, required flow/binding,
+  registration action and preserved default browser flow.
+- Mandatory S256, exact redirects, disabled grants and required client authentication.
+- Full stop/start preserves realm/client/flow IDs, settings and signing keys;
+  the configuration tests pass again after restart.
+- Zero application users were seeded.
+
+These automated checks do not test browser passkey authentication. The successful
+manual test is recorded below. Production TLS and Kubernetes deployment remain
+untested.
+
+## Retained environments
+
+`ce1-auth-dev` is stopped and retained as a backup. Its containers, original
+`infra/auth/.env`, local ownership/credential files, database and signing keys
+remain intact. Its PostgreSQL volume is `ce1-auth-dev_postgres_data`.
+
+`ce1-auth-import-test` remains stopped and untouched, with volume
+`ce1-auth-import-test_postgres_data`. It is a separate disposable test project,
+not the primary development environment.
+
+Do not pass the primary environment file to commands that start or reconfigure
+either retained project. Backup recovery must use its original settings and
+credentials. Do not delete any retained containers or volumes without approval.
+
+## Manual test results and remaining checks
+
+Phase 2A's local identity-provider setup and positive manual browser test are
+complete. The developer reported the following results in `ce1-auth-local`:
+
+- An administrator created `dev-dispatcher` and assigned the `dispatcher` role.
+- A WebAuthn passwordless passkey was registered.
+- A private-window client login succeeded without entering a Keycloak password.
+- Keycloak redirected to `http://localhost:8082/auth/callback` with an
+  authorization code, matching state and no OAuth error.
+- The callback connection was refused, as expected: the Go BFF does not exist yet.
+
+This establishes successful browser authentication and code issuance. Code
+exchange, token validation and application sessions have not been tested or
+implemented. The user and passkey were provisioned manually after native import;
+they are not in the seed.
+
+To prepare another manual request, run from `infra/auth`:
+
+~~~powershell
+powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\prepare-passkey-test.ps1 -EnvironmentFile .\local\ce1-auth-local.env -RequestFile ce1-auth-local-login-test-next.json
+~~~
+
+The environment parameter defaults to `local/ce1-auth-local.env`. Use a new JSON
+filename on each run; existing files are never overwritten. Open the generated
+file under ignored `local/`, copy only its `loginUrl` value without surrounding
+quotes, and use a private browser window. The JSON preserves literal ampersands
+for copying. Do not share the file, full URL or callback parameters.
+
+Negative browser tests have not been reported as performed: cancelling passkey
+authentication, attempting login before enrollment, and ensuring an existing
+Account Console password-authenticated SSO session cannot bypass the client's
+required passkey step. Automated configuration checks are not substitutes for
+these browser tests. Cross-platform authenticator compatibility is also untested.
+
+Removal of any enrollment password, termination of enrollment sessions and a
+fresh login after cleanup remain unconfirmed. No cleanup is automated or claimed.
+Keep bootstrap credentials private; a shared OS-profile PIN does not establish
+individual identity. The primary Account Console is
+<http://localhost:8083/realms/ce1-dev/account/>.
+
+See [PHASE2A.md](PHASE2A.md) for repeat testing, enrollment and security limits.
+BFF callbacks, application sessions and device authentication belong to later,
+separately approved work.
+
+## Troubleshooting and limitations
+
+- If Docker is unavailable, start Docker Desktop with Linux containers.
+- If startup fails, inspect `docker compose --env-file local/ce1-auth-local.env -p ce1-auth-local logs --tail 100 keycloak postgres` privately.
+- If port 8083 is occupied, identify its owner; do not stop an unrelated service.
+- If credentials fail after an environment-file edit, remember that stored
+  database/admin/client credentials do not rotate through startup settings.
+- If configuration changes appear ignored, the existing realm was skipped.
+- Always use `localhost` consistently for browser access and issuer validation.
+
+This local setup uses `start-dev`, HTTP, `sslRequired: none`, and unencrypted
+database traffic inside its isolated bridge network. Do not expose it on
+LAN/Tailscale or use real incident data. A later Kubernetes deployment needs
+production startup, HTTPS, trusted hostname/proxy settings, private access,
+managed secrets, appropriate database security and persistence. It can use this
+same JSON without PowerShell. No Kubernetes manifests are created here.
 
 ## Official references
 
-- [Keycloak downloads](https://www.keycloak.org/downloads)
-- [Supported configurations](https://www.keycloak.org/server/supported-configurations)
-- [Container configuration](https://www.keycloak.org/server/containers)
-- [Health checks](https://www.keycloak.org/observability/health)
-- [Realm import behavior](https://www.keycloak.org/server/importExport)
-- [PostgreSQL version policy](https://www.postgresql.org/support/versioning/)
+- [Realm import and placeholders](https://www.keycloak.org/server/importExport)
+- [Hostname configuration](https://www.keycloak.org/server/hostname)
+- [Production configuration](https://www.keycloak.org/server/configuration-production)
