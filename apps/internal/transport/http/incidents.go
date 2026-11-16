@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -8,6 +9,9 @@ import (
 
 	"github.com/google/uuid"
 	application "github.com/nawfal-btw/CE1-Group-3/apps/internal/application"
+	"github.com/nawfal-btw/CE1-Group-3/apps/internal/observability"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Field records whether a JSON property was present. A JSON null value is
@@ -15,20 +19,6 @@ import (
 type Field[T any] struct {
 	Value *T
 	Set   bool
-}
-
-func (field *Field[T]) UnmarshalJSON(data []byte) error {
-	field.Set = true
-	if string(data) == "null" {
-		field.Value = nil
-		return nil
-	}
-	var value T
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	field.Value = &value
-	return nil
 }
 
 type incidentRequest struct {
@@ -63,33 +53,50 @@ type locationResponse struct {
 }
 
 type IncidentHandler struct {
-	service       application.IncidentService
-	authenticator IncidentAuthenticator
-	logger        *slog.Logger
+	incidentService application.IncidentService
+	authorizer      IncidentAuthorizer
+	logger          *slog.Logger
+	tracer          trace.Tracer
 }
 
-// IncidentAuthenticator authenticates HTTP requests. It must not make
-// role-dependent authorization decisions.
-type IncidentAuthenticator interface {
-	AuthenticateIncident(*http.Request) (application.Identity, error)
+func (field *Field[T]) UnmarshalJSON(data []byte) error {
+	field.Set = true
+	if string(data) == "null" {
+		field.Value = nil
+		return nil
+	}
+	var value T
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	field.Value = &value
+	return nil
 }
 
-func NewIncidentHandler(service application.IncidentService, authenticator IncidentAuthenticator, logger *slog.Logger) IncidentHandler {
-	return IncidentHandler{service: service, authenticator: authenticator, logger: logger.With("layer", "transport")}
+func NewIncidentHandler(service application.IncidentService, authenticator IncidentAuthorizer, logger *slog.Logger, tracer trace.Tracer) IncidentHandler {
+	return IncidentHandler{incidentService: service, authorizer: authenticator, logger: logger, tracer: tracer}
 }
 
 func (h IncidentHandler) PostIncident(w http.ResponseWriter, r *http.Request) {
-	h.logger.InfoContext(r.Context(), "received post incident request")
+	ctx, span, logger := h.startRequest(r, "transport.PostIncident")
+	var err error
+	defer func() { endSpan(span, err) }()
+	r = r.WithContext(ctx)
 	identity, ok := h.authenticateIncident(w, r)
 	if !ok {
 		return
 	}
+	ctx = observability.WithUserID(ctx, identity.SubjectID.String())
+	r = r.WithContext(ctx)
+	logger = observability.AddPersistentAttributes(ctx, h.logger, "transport")
 	input, ok := decodeIncidentInput(w, r)
 	if !ok {
+		logger.WarnContext(ctx, "incident request body rejected")
 		return
 	}
-	incident, err := h.service.PostIncident(r.Context(), identity, input)
+	incident, err := h.incidentService.PostIncident(ctx, identity, input)
 	if err != nil {
+		logger.WarnContext(ctx, "incident post request failed", "error", err)
 		writeError(w, err)
 		return
 	}
@@ -97,21 +104,30 @@ func (h IncidentHandler) PostIncident(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h IncidentHandler) PatchIncident(w http.ResponseWriter, r *http.Request) {
-	h.logger.InfoContext(r.Context(), "received patch incident request")
+	ctx, span, logger := h.startRequest(r, "transport.PatchIncident")
+	var err error
+	defer func() { endSpan(span, err) }()
+	r = r.WithContext(ctx)
 	identity, ok := h.authenticateIncident(w, r)
 	if !ok {
 		return
 	}
+	ctx = observability.WithUserID(ctx, identity.SubjectID.String())
+	r = r.WithContext(ctx)
+	logger = observability.AddPersistentAttributes(ctx, h.logger, "transport")
 	id, ok := parseIncidentID(w, r)
 	if !ok {
+		logger.WarnContext(ctx, "incident patch request has invalid ID")
 		return
 	}
 	input, ok := decodeIncidentInput(w, r)
 	if !ok {
+		logger.WarnContext(ctx, "incident patch request body rejected", "incident_id", id)
 		return
 	}
-	incident, err := h.service.PatchIncident(r.Context(), identity, id, input)
+	incident, err := h.incidentService.PatchIncident(ctx, identity, id, input)
 	if err != nil {
+		logger.WarnContext(ctx, "incident patch request failed", "incident_id", id, "error", err)
 		writeError(w, err)
 		return
 	}
@@ -119,17 +135,25 @@ func (h IncidentHandler) PatchIncident(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h IncidentHandler) GetIncident(w http.ResponseWriter, r *http.Request) {
-	h.logger.InfoContext(r.Context(), "received get incident request")
+	ctx, span, logger := h.startRequest(r, "transport.GetIncident")
+	var err error
+	defer func() { endSpan(span, err) }()
+	r = r.WithContext(ctx)
 	identity, ok := h.authenticateIncident(w, r)
 	if !ok {
 		return
 	}
+	ctx = observability.WithUserID(ctx, identity.SubjectID.String())
+	r = r.WithContext(ctx)
+	logger = observability.AddPersistentAttributes(ctx, h.logger, "transport")
 	id, ok := parseIncidentID(w, r)
 	if !ok {
+		logger.WarnContext(ctx, "incident get request has invalid ID")
 		return
 	}
-	incident, err := h.service.GetIncident(r.Context(), identity, id)
+	incident, err := h.incidentService.GetIncident(ctx, identity, id)
 	if err != nil {
+		logger.WarnContext(ctx, "incident get request failed", "incident_id", id, "error", err)
 		writeError(w, err)
 		return
 	}
@@ -137,13 +161,36 @@ func (h IncidentHandler) GetIncident(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h IncidentHandler) authenticateIncident(w http.ResponseWriter, r *http.Request) (application.Identity, bool) {
-	identity, err := h.authenticator.AuthenticateIncident(r)
+	identity, err := h.authorizer.AuthenticateIncident(r)
 	if err != nil {
-		h.logger.WarnContext(r.Context(), "incident authentication failed", "error", err)
+		observability.AddPersistentAttributes(r.Context(), h.logger, "transport").WarnContext(r.Context(), "incident authentication failed", "error", err)
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return application.Identity{}, false
 	}
 	return identity, true
+}
+
+type contextKey struct{}
+
+func (h IncidentHandler) startRequest(r *http.Request, spanName string) (context.Context, trace.Span, *slog.Logger) {
+	ctx := r.Context()
+	ctx, span := h.tracer.Start(ctx, spanName)
+
+	metadata := observability.GetMetadataFromContext(ctx)
+	metadata.Endpoint = r.Pattern
+	metadata.TraceID = trace.SpanContextFromContext(ctx).TraceID().String()
+
+	ctx = observability.AddMetadataToContext(ctx, metadata)
+
+	return ctx, span, observability.AddPersistentAttributes(ctx, h.logger, "transport")
+}
+
+func endSpan(span trace.Span, err error) {
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+	span.End()
 }
 
 func decodeIncidentInput(w http.ResponseWriter, r *http.Request) (application.IncidentInput, bool) {
@@ -182,8 +229,8 @@ func toIncidentInput(request incidentRequest) application.IncidentInput {
 	}
 }
 
-func toApplicationField[T any](field Field[T]) application.Field[T] {
-	return application.Field[T]{Value: field.Value, Set: field.Set}
+func toApplicationField[T any](field Field[T]) application.Option[T] {
+	return application.Option[T]{Value: field.Value, Set: field.Set}
 }
 
 func toIncidentResponse(incident *application.Incident) incidentResponse {

@@ -7,6 +7,9 @@ import (
 
 	"github.com/google/uuid"
 	domain "github.com/nawfal-btw/CE1-Group-3/apps/internal/domain"
+	"github.com/nawfal-btw/CE1-Group-3/apps/internal/observability"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 )
 
@@ -15,20 +18,28 @@ var ErrIncidentNotFound = errors.New("incident not found")
 type IncidentRepo struct {
 	db     *gorm.DB
 	logger *slog.Logger
+	tracer trace.Tracer
 }
 
-func NewIncidentRepo(db *gorm.DB, logger *slog.Logger) *IncidentRepo {
-	return &IncidentRepo{db: db, logger: logger.With("layer", "repository")}
+func NewIncidentRepo(db *gorm.DB, logger *slog.Logger, tracer trace.Tracer) *IncidentRepo {
+	return &IncidentRepo{db: db, logger: logger, tracer: tracer}
 }
 
-func (r *IncidentRepo) PostIncident(ctx context.Context, incident *domain.Incident) error {
-	r.logger.InfoContext(ctx, "storing incident", "incident_id", incident.ID)
+func (r *IncidentRepo) PostIncident(ctx context.Context, incident *domain.Incident) (err error) {
+	ctx, span := r.tracer.Start(ctx, "repository.PostIncident")
+	defer func() { endSpan(span, err) }()
+	logger := observability.AddPersistentAttributes(ctx, r.logger, "repository")
 	row := incidentToRow(incident)
-	return r.db.WithContext(ctx).Create(&row).Error
+	if err = r.db.WithContext(ctx).Create(&row).Error; err != nil {
+		logger.ErrorContext(ctx, "incident insert failed", "incident_id", incident.ID, "error", err)
+	}
+	return err
 }
 
-func (r *IncidentRepo) PatchIncident(ctx context.Context, incident *domain.Incident) error {
-	r.logger.InfoContext(ctx, "updating incident", "incident_id", incident.ID)
+func (r *IncidentRepo) PatchIncident(ctx context.Context, incident *domain.Incident) (err error) {
+	ctx, span := r.tracer.Start(ctx, "repository.PatchIncident")
+	defer func() { endSpan(span, err) }()
+	logger := observability.AddPersistentAttributes(ctx, r.logger, "repository")
 	row := incidentToRow(incident)
 	result := r.db.WithContext(ctx).
 		Model(&incidentRow{ID: row.ID}).
@@ -36,25 +47,39 @@ func (r *IncidentRepo) PatchIncident(ctx context.Context, incident *domain.Incid
 		Omit("id").
 		Updates(row)
 	if result.Error != nil {
+		logger.ErrorContext(ctx, "incident update failed", "incident_id", incident.ID, "error", result.Error)
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
+		logger.WarnContext(ctx, "incident update did not find incident", "incident_id", incident.ID)
 		return ErrIncidentNotFound
 	}
 	return nil
 }
 
-func (r *IncidentRepo) GetIncident(ctx context.Context, id domain.IncidentID) (*domain.Incident, error) {
-	r.logger.InfoContext(ctx, "loading incident", "incident_id", id)
+func (r *IncidentRepo) GetIncident(ctx context.Context, id domain.IncidentID) (incident *domain.Incident, err error) {
+	ctx, span := r.tracer.Start(ctx, "repository.GetIncident")
+	defer func() { endSpan(span, err) }()
+	logger := observability.AddPersistentAttributes(ctx, r.logger, "repository")
 	var row incidentRow
-	err := r.db.WithContext(ctx).First(&row, "id = ?", uuid.UUID(id)).Error
+	err = r.db.WithContext(ctx).First(&row, "id = ?", uuid.UUID(id)).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		logger.WarnContext(ctx, "incident not found", "incident_id", id)
 		return nil, ErrIncidentNotFound
 	}
 	if err != nil {
+		logger.ErrorContext(ctx, "incident lookup failed", "incident_id", id, "error", err)
 		return nil, err
 	}
 	return rowToIncident(row), nil
+}
+
+func endSpan(span trace.Span, err error) {
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+	span.End()
 }
 
 // incidentRow is deliberately separate from domain.Incident so GORM remains a

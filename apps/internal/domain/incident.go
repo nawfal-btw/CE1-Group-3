@@ -1,9 +1,7 @@
 package domain
 
 import (
-	"context"
 	"errors"
-	"log/slog"
 
 	"github.com/google/uuid"
 )
@@ -51,14 +49,11 @@ type Location struct {
 
 // ValidateIncident is the single place for incident field validation. Value-specific
 // rules can be added to the validate functions as the accepted values are defined.
-func ValidateIncident(ctx context.Context, logger *slog.Logger, incident *Incident) error {
-	logger.DebugContext(ctx, "validating incident")
+func ValidateIncident(incident *Incident) error {
 	if incident == nil {
-		logger.WarnContext(ctx, "incident validation failed", "reason", "incident is nil")
 		return ErrInvalidIncident
 	}
 	if uuid.UUID(incident.ID) == uuid.Nil {
-		logger.WarnContext(ctx, "incident validation failed", "reason", "incident ID is required")
 		return errors.Join(ErrInvalidIncident, errors.New("incident ID is required"))
 	}
 	if incident.Type.Set && incident.Type.Value != nil {
@@ -77,14 +72,12 @@ func ValidateIncident(ctx context.Context, logger *slog.Logger, incident *Incide
 		}
 	}
 	if err := validateLocation(incident.Location); err != nil {
-		logger.WarnContext(ctx, "incident validation failed", "reason", err)
 		return errors.Join(ErrInvalidIncident, err)
 	}
 	return nil
 }
 
-func PostIncident(ctx context.Context, logger *slog.Logger, patch IncidentPatch) (*Incident, error) {
-	logger.InfoContext(ctx, "posting incident")
+func PostIncident(patch IncidentPatch) (*Incident, error) {
 	incident := &Incident{
 		ID:          IncidentID(uuid.New()),
 		Type:        patch.Type,
@@ -93,15 +86,14 @@ func PostIncident(ctx context.Context, logger *slog.Logger, patch IncidentPatch)
 		Location:    patch.Location,
 		Description: patch.Description,
 	}
-	if err := ValidateIncident(ctx, logger, incident); err != nil {
+	if err := ValidateIncident(incident); err != nil {
 		return nil, err
 	}
 	return incident, nil
 }
 
-func PatchIncident(ctx context.Context, logger *slog.Logger, patch IncidentPatch, incident *Incident) (*Incident, error) {
-	logger.InfoContext(ctx, "patching incident")
-	if err := ValidateIncident(ctx, logger, incident); err != nil {
+func PatchIncident(patch IncidentPatch, incident *Incident) (*Incident, error) {
+	if err := ValidateIncident(incident); err != nil {
 		return nil, err
 	}
 
@@ -132,15 +124,14 @@ func PatchIncident(ctx context.Context, logger *slog.Logger, patch IncidentPatch
 		patched.Description = patch.Description
 	}
 
-	if err := ValidateIncident(ctx, logger, &patched); err != nil {
+	if err := ValidateIncident(&patched); err != nil {
 		return nil, err
 	}
 	return &patched, nil
 }
 
-func GetIncident(ctx context.Context, logger *slog.Logger, incident *Incident) (*Incident, error) {
-	logger.InfoContext(ctx, "getting incident")
-	if err := ValidateIncident(ctx, logger, incident); err != nil {
+func GetIncident(incident *Incident) (*Incident, error) {
+	if err := ValidateIncident(incident); err != nil {
 		return nil, err
 	}
 	return incident, nil
