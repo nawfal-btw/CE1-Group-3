@@ -24,8 +24,8 @@ type Handler struct {
 	traceContext      propagation.TextMapPropagator
 }
 
-func NewHandler(logger *slog.Logger, tracer trace.Tracer, traceContext propagation.TextMapPropagator) *Handler {
-	return &Handler{logger: logger, tracer: tracer, traceContext: traceContext}
+func NewHandler(logger *slog.Logger, tracer trace.Tracer, traceContext propagation.TextMapPropagator, incidentHandler IncidentHandler) *Handler {
+	return &Handler{logger: logger, tracer: tracer, traceContext: traceContext, incidentHandler: incidentHandler}
 }
 
 func (h Handler) Routes() http.Handler {
@@ -42,9 +42,12 @@ func (h Handler) middleware(next http.Handler) http.Handler {
 	return h.tracingMiddleware(h.authMiddleware(next))
 }
 
+// authMiddleware is a pass-through for now: it forwards every request unchanged.
+// Incident handlers already authenticate each request themselves (AuthenticateIncident).
+// TODO(auth team): add request-wide authentication here and stop calling next on failure.
 func (h Handler) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
+		next.ServeHTTP(w, r)
 	})
 }
 

@@ -25,6 +25,14 @@ func GetMetadataFromContext(ctx context.Context) RequestMetadata {
 	return metadata
 }
 
+// WithUserID returns a copy of ctx whose request metadata includes the authenticated user's ID,
+// so every log line written after authentication carries it.
+func WithUserID(ctx context.Context, userID string) context.Context {
+	metadata := GetMetadataFromContext(ctx)
+	metadata.UserID = userID
+	return AddMetadataToContext(ctx, metadata)
+}
+
 func AddPersistentAttributes(ctx context.Context, logger *slog.Logger, layer string) *slog.Logger {
 	metadata := GetMetadataFromContext(ctx)
 	return logger.With(
