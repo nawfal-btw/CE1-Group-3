@@ -15,3 +15,4 @@ This directory contains immutable `golang-migrate` schema versions. Every shared
 | 000002 | Creates the `agencies` table |
 | 000003 | Creates the `resources` table (each resource belongs to an agency) |
 | 000004 | Creates the `allocations` table (links resources to incidents; one active allocation per resource) |
+| 000005 | `incidents.created_at_utc` defaults to the insert time |
