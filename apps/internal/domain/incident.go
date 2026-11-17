@@ -2,11 +2,16 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 )
 
 var ErrInvalidIncident = errors.New("invalid incident")
+
+// ErrIncidentNotFound is returned when no incident exists with the requested ID.
+// It lives in the domain so every layer can recognise it without importing the repository.
+var ErrIncidentNotFound = errors.New("incident not found")
 
 type (
 	IncidentID       uuid.UUID
@@ -137,7 +142,10 @@ func GetIncident(incident *Incident) (*Incident, error) {
 	return incident, nil
 }
 
-func validateIncidentType(IncidentType) error {
+func validateIncidentType(t IncidentType) error {
+	if !IsValidType(t) {
+		return fmt.Errorf("unknown incident type %d", t)
+	}
 	return nil
 }
 
@@ -145,7 +153,10 @@ func validateIncidentStatus(IncidentStatus) error {
 	return nil
 }
 
-func validateIncidentPriority(IncidentPriority) error {
+func validateIncidentPriority(p IncidentPriority) error {
+	if !IsValidPriority(p) {
+		return fmt.Errorf("unknown incident priority %d", p)
+	}
 	return nil
 }
 

@@ -16,6 +16,7 @@ import (
 )
 
 var ErrInvalidIncident = domain.ErrInvalidIncident
+var ErrIncidentNotFound = domain.ErrIncidentNotFound
 var ErrUnauthorized = errors.New("unauthorized")
 
 type Identity struct {

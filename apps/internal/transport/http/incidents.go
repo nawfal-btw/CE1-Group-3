@@ -199,7 +199,8 @@ func decodeIncidentInput(w http.ResponseWriter, r *http.Request) (application.In
 	decoder.DisallowUnknownFields()
 	var request incidentRequest
 	if err := decoder.Decode(&request); err != nil {
-		writeError(w, err)
+		// The client sent a body we cannot read: that is the client's mistake (400), not ours (500).
+		http.Error(w, "invalid JSON body: "+err.Error(), http.StatusBadRequest)
 		return application.IncidentInput{}, false
 	}
 	return toIncidentInput(request), true
@@ -208,7 +209,7 @@ func decodeIncidentInput(w http.ResponseWriter, r *http.Request) (application.In
 func parseIncidentID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		writeError(w, err)
+		http.Error(w, "invalid incident id: must be a UUID", http.StatusBadRequest)
 		return uuid.Nil, false
 	}
 	return id, true
@@ -255,13 +256,18 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 
+// writeError maps an application error to an HTTP status code.
 func writeError(w http.ResponseWriter, err error) {
-	status := http.StatusInternalServerError
-	if errors.Is(err, application.ErrInvalidIncident) {
-		status = http.StatusBadRequest
+	switch {
+	case errors.Is(err, application.ErrInvalidIncident):
+		http.Error(w, err.Error(), http.StatusBadRequest) // 400: the data broke a domain rule
+	case errors.Is(err, application.ErrIncidentNotFound):
+		http.Error(w, err.Error(), http.StatusNotFound) // 404: no incident with that ID
+	case errors.Is(err, application.ErrUnauthorized):
+		http.Error(w, err.Error(), http.StatusForbidden) // 403: known user, action not allowed
+	default:
+		// 500: our fault. Do not send internal details (e.g. database errors) to the client;
+		// they are already logged by the layer where they happened.
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
-	if errors.Is(err, application.ErrUnauthorized) {
-		status = http.StatusForbidden
-	}
-	http.Error(w, err.Error(), status)
 }

@@ -13,7 +13,8 @@ import (
 	"gorm.io/gorm"
 )
 
-var ErrIncidentNotFound = errors.New("incident not found")
+// ErrIncidentNotFound is the domain's not-found error, re-exported for callers of this package.
+var ErrIncidentNotFound = domain.ErrIncidentNotFound
 
 type IncidentRepo struct {
 	db     *gorm.DB

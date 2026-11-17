@@ -30,6 +30,8 @@ func NewHandler(logger *slog.Logger, tracer trace.Tracer, traceContext propagati
 
 func (h Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
+	// The literal path wins over the {id} wildcard below, so "options" is never parsed as an ID.
+	mux.HandleFunc("GET /v1/incident/options", h.incidentHandler.GetIncidentOptions)
 	mux.HandleFunc("GET /v1/incident/{id}", h.incidentHandler.GetIncident)
 	mux.HandleFunc("POST /v1/incident", h.incidentHandler.PostIncident)
 	mux.HandleFunc("PATCH /v1/incident/{id}", h.incidentHandler.PatchIncident)
