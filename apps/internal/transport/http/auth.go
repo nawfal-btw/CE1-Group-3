@@ -10,5 +10,3 @@ import (
 type IncidentAuthenticator interface {
 	AuthenticateIncident(*http.Request) (application.Identity, error)
 }
-
-func 

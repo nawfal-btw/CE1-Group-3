@@ -1,0 +1,33 @@
+# Preparation only: applying this override recreates Keycloak and needs separate
+# migration approval. Always combine with compose.yaml and -p ce1-auth-local.
+# Requires Docker Compose 2.24.4+ for !override (replace, rather than append, ports).
+services:
+  keycloak:
+    command: ["start", "--import-realm"]
+    environment:
+      KC_HOSTNAME: https://localhost:8443
+      KC_HOSTNAME_STRICT: "true"
+      KC_HTTP_ENABLED: "false"
+      KC_HTTPS_PORT: "8443"
+      KC_HTTPS_CERTIFICATE_FILE: /opt/keycloak/conf/tls/keycloak.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /opt/keycloak/conf/tls/keycloak-key.pem
+      # Keep the inherited private HTTP /dev/tcp health check working on 9000.
+      KC_HTTP_MANAGEMENT_SCHEME: http
+      AUTH_BFF_REDIRECT_URI: https://127.0.0.1:8444/auth/callback
+      AUTH_WEBAUTHN_RP_ID: localhost
+      AUTH_SSL_REQUIRED: all
+    ports: !override
+      - "127.0.0.1:8443:8443"
+    volumes:
+      - type: bind
+        source: ./local/tls/keycloak.pem
+        target: /opt/keycloak/conf/tls/keycloak.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./local/tls/keycloak-key.pem
+        target: /opt/keycloak/conf/tls/keycloak-key.pem
+        read_only: true
+        bind:
+          create_host_path: false

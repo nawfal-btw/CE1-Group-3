@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	application "github.com/nawfal-btw/CE1-Group-3/apps/internal/application"
+	"github.com/nawfal-btw/CE1-Group-3/apps/internal/auth"
 )
 
 // Field records whether a JSON property was present. A JSON null value is
@@ -66,12 +67,6 @@ type IncidentHandler struct {
 	service       application.IncidentService
 	authenticator IncidentAuthenticator
 	logger        *slog.Logger
-}
-
-// IncidentAuthenticator authenticates HTTP requests. It must not make
-// role-dependent authorization decisions.
-type IncidentAuthenticator interface {
-	AuthenticateIncident(*http.Request) (application.Identity, error)
 }
 
 func NewIncidentHandler(service application.IncidentService, authenticator IncidentAuthenticator, logger *slog.Logger) IncidentHandler {
@@ -139,8 +134,12 @@ func (h IncidentHandler) GetIncident(w http.ResponseWriter, r *http.Request) {
 func (h IncidentHandler) authenticateIncident(w http.ResponseWriter, r *http.Request) (application.Identity, bool) {
 	identity, err := h.authenticator.AuthenticateIncident(r)
 	if err != nil {
-		h.logger.WarnContext(r.Context(), "incident authentication failed", "error", err)
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		status := http.StatusUnauthorized
+		if errors.Is(err, auth.ErrAuthUnavailable) {
+			status = http.StatusServiceUnavailable
+		}
+		h.logger.WarnContext(r.Context(), "incident authentication failed", "status", status)
+		http.Error(w, http.StatusText(status), status)
 		return application.Identity{}, false
 	}
 	return identity, true
