@@ -44,6 +44,13 @@ func (h Handler) middleware(next http.Handler) http.Handler {
 
 func (h Handler) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Should verify session and include user id to header
+		cookie, err := r.Cookie("session")
+		if err != nil || cookie.Value == "" {
+			http.Error(w, "session cookie not supplied or failed", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
 
 	})
 }

@@ -98,7 +98,7 @@ func (s IncidentService) PostIncident(ctx context.Context, identity Identity, in
 		s.recordChange(ctx, "post_incident", outcomeFromError(err))
 	}(time.Now())
 
-	logger := observability.LoggerFor(ctx, s.logger, "application")
+	logger := observability.AddPersistentAttributes(ctx, s.logger, "application")
 	if authorizationErr := s.authorizer.AuthorizePostIncident(ctx, identity); authorizationErr != nil {
 		err = errors.Join(ErrUnauthorized, authorizationErr)
 		s.recordAuthorization(ctx, "post_incident", "denied")
@@ -111,7 +111,7 @@ func (s IncidentService) PostIncident(ctx context.Context, identity Identity, in
 	incident, domainErr := domain.PostIncident(toIncidentPatch(input))
 	endSpan(domainSpan, domainErr)
 	if domainErr != nil {
-		logger := observability.LoggerFor(domainCtx, s.logger, "domain")
+		logger := observability.AddPersistentAttributes(domainCtx, s.logger, "domain")
 		logger.WarnContext(domainCtx, "incident validation failed", "error", domainErr)
 		return nil, domainErr
 	}
@@ -131,7 +131,7 @@ func (s IncidentService) PatchIncident(ctx context.Context, identity Identity, i
 		s.recordChange(ctx, "patch_incident", outcomeFromError(err))
 	}(time.Now())
 
-	logger := observability.LoggerFor(ctx, s.logger, "application")
+	logger := observability.AddPersistentAttributes(ctx, s.logger, "application")
 	if authorizationErr := s.authorizer.AuthorizePatchIncident(ctx, identity, id); authorizationErr != nil {
 		err = errors.Join(ErrUnauthorized, authorizationErr)
 		s.recordAuthorization(ctx, "patch_incident", "denied")
@@ -148,7 +148,7 @@ func (s IncidentService) PatchIncident(ctx context.Context, identity Identity, i
 	incident, domainErr := domain.PatchIncident(toIncidentPatch(input), incident)
 	endSpan(domainSpan, domainErr)
 	if domainErr != nil {
-		observability.LoggerFor(domainCtx, s.logger, "domain").WarnContext(domainCtx, "incident validation failed", "incident_id", id, "error", domainErr)
+		observability.AddPersistentAttributes(domainCtx, s.logger, "domain").WarnContext(domainCtx, "incident validation failed", "incident_id", id, "error", domainErr)
 		return nil, domainErr
 	}
 	if err = s.incidents.PatchIncident(ctx, incident); err != nil {
@@ -166,7 +166,7 @@ func (s IncidentService) GetIncident(ctx context.Context, identity Identity, id 
 		s.recordLatency(ctx, "get_incident", start)
 	}(time.Now())
 
-	logger := observability.LoggerFor(ctx, s.logger, "application")
+	logger := observability.AddPersistentAttributes(ctx, s.logger, "application")
 	if authorizationErr := s.authorizer.AuthorizeGetIncident(ctx, identity, id); authorizationErr != nil {
 		err = errors.Join(ErrUnauthorized, authorizationErr)
 		s.recordAuthorization(ctx, "get_incident", "denied")
@@ -183,7 +183,7 @@ func (s IncidentService) GetIncident(ctx context.Context, identity Identity, id 
 	incident, domainErr := domain.GetIncident(incident)
 	endSpan(domainSpan, domainErr)
 	if domainErr != nil {
-		observability.LoggerFor(domainCtx, s.logger, "domain").ErrorContext(domainCtx, "stored incident failed validation", "incident_id", id, "error", domainErr)
+		observability.AddPersistentAttributes(domainCtx, s.logger, "domain").ErrorContext(domainCtx, "stored incident failed validation", "incident_id", id, "error", domainErr)
 		return nil, domainErr
 	}
 	return fromDomainIncident(incident), nil

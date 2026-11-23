@@ -86,7 +86,7 @@ func (h IncidentHandler) PostIncident(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ctx = observability.WithUserID(ctx, identity.SubjectID.String())
+	// ctx = observability.WithUserID(ctx, identity.SubjectID.String())
 	r = r.WithContext(ctx)
 	logger = observability.AddPersistentAttributes(ctx, h.logger, "transport")
 	input, ok := decodeIncidentInput(w, r)
@@ -112,7 +112,7 @@ func (h IncidentHandler) PatchIncident(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ctx = observability.WithUserID(ctx, identity.SubjectID.String())
+	// ctx = observability.WithUserID(ctx, identity.SubjectID.String())
 	r = r.WithContext(ctx)
 	logger = observability.AddPersistentAttributes(ctx, h.logger, "transport")
 	id, ok := parseIncidentID(w, r)
@@ -143,7 +143,7 @@ func (h IncidentHandler) GetIncident(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ctx = observability.WithUserID(ctx, identity.SubjectID.String())
+	// ctx = observability.WithUserID(ctx, identity.SubjectID.String())
 	r = r.WithContext(ctx)
 	logger = observability.AddPersistentAttributes(ctx, h.logger, "transport")
 	id, ok := parseIncidentID(w, r)
