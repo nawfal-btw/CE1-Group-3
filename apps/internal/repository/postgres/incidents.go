@@ -2,9 +2,9 @@ package postgres
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 
+	"database/sql"
 	"github.com/google/uuid"
 	domain "github.com/nawfal-btw/CE1-Group-3/apps/internal/domain"
 	"github.com/nawfal-btw/CE1-Group-3/apps/internal/observability"
@@ -13,22 +13,21 @@ import (
 	"gorm.io/gorm"
 )
 
-var ErrIncidentNotFound = errors.New("incident not found")
-
-type IncidentRepo struct {
-	db     *gorm.DB
+type IncidentRepository struct {
+	db     *sql.DB
+	orm    *gorm.DB
 	logger *slog.Logger
 	tracer trace.Tracer
 }
 
-func NewIncidentRepo(db *gorm.DB, logger *slog.Logger, tracer trace.Tracer) *IncidentRepo {
-	return &IncidentRepo{db: db, logger: logger, tracer: tracer}
+func NewIncidentRepository(db *sql.DB, logger *slog.Logger, tracer trace.Tracer) *IncidentRepository {
+	return &IncidentRepository{db: db, logger: logger, tracer: tracer}
 }
 
-func (r *IncidentRepo) PostIncident(ctx context.Context, incident *domain.Incident) (err error) {
+func (r *IncidentRepository) PostIncident(ctx context.Context, incident *domain.Incident) (err error) {
 	ctx, span := r.tracer.Start(ctx, "repository.PostIncident")
 	defer func() { endSpan(span, err) }()
-	logger := observability.AddPersistentAttributes(ctx, r.logger, "repository")
+	logger := observability.LoggerFor(ctx, r.logger, "repository")
 	row := incidentToRow(incident)
 	if err = r.db.WithContext(ctx).Create(&row).Error; err != nil {
 		logger.ErrorContext(ctx, "incident insert failed", "incident_id", incident.ID, "error", err)
@@ -36,10 +35,10 @@ func (r *IncidentRepo) PostIncident(ctx context.Context, incident *domain.Incide
 	return err
 }
 
-func (r *IncidentRepo) PatchIncident(ctx context.Context, incident *domain.Incident) (err error) {
+func (r *IncidentRepository) PatchIncident(ctx context.Context, incident *domain.Incident) (found bool, err error) {
 	ctx, span := r.tracer.Start(ctx, "repository.PatchIncident")
 	defer func() { endSpan(span, err) }()
-	logger := observability.AddPersistentAttributes(ctx, r.logger, "repository")
+	logger := observability.LoggerFor(ctx, r.logger, "repository")
 	row := incidentToRow(incident)
 	result := r.db.WithContext(ctx).
 		Model(&incidentRow{ID: row.ID}).
@@ -48,30 +47,30 @@ func (r *IncidentRepo) PatchIncident(ctx context.Context, incident *domain.Incid
 		Updates(row)
 	if result.Error != nil {
 		logger.ErrorContext(ctx, "incident update failed", "incident_id", incident.ID, "error", result.Error)
-		return result.Error
+		return false, result.Error
 	}
 	if result.RowsAffected == 0 {
 		logger.WarnContext(ctx, "incident update did not find incident", "incident_id", incident.ID)
-		return ErrIncidentNotFound
+		return false, nil
 	}
-	return nil
+	return true, nil
 }
 
-func (r *IncidentRepo) GetIncident(ctx context.Context, id domain.IncidentID) (incident *domain.Incident, err error) {
+func (r *IncidentRepository) GetIncident(ctx context.Context, id domain.IncidentID) (incident *domain.Incident, found bool, err error) {
 	ctx, span := r.tracer.Start(ctx, "repository.GetIncident")
 	defer func() { endSpan(span, err) }()
-	logger := observability.AddPersistentAttributes(ctx, r.logger, "repository")
+	logger := observability.LoggerFor(ctx, r.logger, "repository")
 	var row incidentRow
 	err = r.db.WithContext(ctx).First(&row, "id = ?", uuid.UUID(id)).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	if err == gorm.ErrRecordNotFound {
 		logger.WarnContext(ctx, "incident not found", "incident_id", id)
-		return nil, ErrIncidentNotFound
+		return nil, false, nil
 	}
 	if err != nil {
 		logger.ErrorContext(ctx, "incident lookup failed", "incident_id", id, "error", err)
-		return nil, err
+		return nil, false, err
 	}
-	return rowToIncident(row), nil
+	return rowToIncident(row), true, nil
 }
 
 func endSpan(span trace.Span, err error) {

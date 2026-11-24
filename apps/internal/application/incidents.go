@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	domain "github.com/nawfal-btw/CE1-Group-3/apps/internal/domain"
 	"github.com/nawfal-btw/CE1-Group-3/apps/internal/observability"
+	repository "github.com/nawfal-btw/CE1-Group-3/apps/internal/repository/postgres"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
@@ -17,6 +18,7 @@ import (
 
 var ErrInvalidIncident = domain.ErrInvalidIncident
 var ErrUnauthorized = errors.New("unauthorized")
+var ErrIncidentNotFound = errors.New("incident not found")
 
 type Identity struct {
 	SubjectID uuid.UUID
@@ -54,40 +56,19 @@ type LocationInput struct {
 
 type IncidentRepository interface {
 	PostIncident(context.Context, *domain.Incident) error
-	PatchIncident(context.Context, *domain.Incident) error
-	GetIncident(context.Context, domain.IncidentID) (*domain.Incident, error)
-}
-
-type IncidentAuthorizer interface {
-	AuthorizePostIncident(context.Context, Identity) error
-	AuthorizePatchIncident(context.Context, Identity, uuid.UUID) error
-	AuthorizeGetIncident(context.Context, Identity, uuid.UUID) error
+	PatchIncident(context.Context, *domain.Incident) (bool, error)
+	GetIncident(context.Context, domain.IncidentID) (*domain.Incident, bool, error)
 }
 
 type IncidentService struct {
-	incidents  IncidentRepository
-	authorizer IncidentAuthorizer
-	logger     *slog.Logger
-	tracer     trace.Tracer
-	latency    metric.Float64Histogram
-	authorize  metric.Int64Counter
-	changes    metric.Int64Counter
+	incidentRepository *repository.IncidentRepository
+	logger             *slog.Logger
+	tracer             trace.Tracer
+	metric             metric.Meter
 }
 
-func NewIncidentService(incidents IncidentRepository, authorizer IncidentAuthorizer, logger *slog.Logger, tracer trace.Tracer, meter metric.Meter) (IncidentService, error) {
-	latency, err := meter.Float64Histogram("incident_use_case_duration_seconds", metric.WithUnit("s"))
-	if err != nil {
-		return IncidentService{}, err
-	}
-	authorize, err := meter.Int64Counter("incident_authorization_total")
-	if err != nil {
-		return IncidentService{}, err
-	}
-	changes, err := meter.Int64Counter("incident_change_total")
-	if err != nil {
-		return IncidentService{}, err
-	}
-	return IncidentService{incidents: incidents, authorizer: authorizer, logger: logger, tracer: tracer, latency: latency, authorize: authorize, changes: changes}, nil
+func NewIncidentService(incidentRepository *repository.IncidentRepository, logger *slog.Logger, tracer trace.Tracer, meter metric.Meter) *IncidentService {
+	return &IncidentService{incidentRepository: incidentRepository, logger: logger, tracer: tracer, metric: meter}
 }
 
 func (s IncidentService) PostIncident(ctx context.Context, identity Identity, input IncidentInput) (result *Incident, err error) {
@@ -115,7 +96,7 @@ func (s IncidentService) PostIncident(ctx context.Context, identity Identity, in
 		logger.WarnContext(domainCtx, "incident validation failed", "error", domainErr)
 		return nil, domainErr
 	}
-	if err = s.incidents.PostIncident(ctx, incident); err != nil {
+	if err = s.incidentRepository.PostIncident(ctx, incident); err != nil {
 		logger.ErrorContext(ctx, "incident storage failed", "incident_id", incident.ID, "error", err)
 		return nil, err
 	}
@@ -139,10 +120,14 @@ func (s IncidentService) PatchIncident(ctx context.Context, identity Identity, i
 		return nil, err
 	}
 	s.recordAuthorization(ctx, "patch_incident", "success")
-	incident, err := s.incidents.GetIncident(ctx, domain.IncidentID(id))
+	incident, found, err := s.incidentRepository.GetIncident(ctx, domain.IncidentID(id))
 	if err != nil {
 		logger.WarnContext(ctx, "incident not available for patch", "incident_id", id, "error", err)
 		return nil, err
+	}
+	if !found {
+		logger.WarnContext(ctx, "incident not available for patch", "incident_id", id)
+		return nil, ErrIncidentNotFound
 	}
 	domainCtx, domainSpan := s.tracer.Start(ctx, "domain.PatchIncident")
 	incident, domainErr := domain.PatchIncident(toIncidentPatch(input), incident)
@@ -151,9 +136,13 @@ func (s IncidentService) PatchIncident(ctx context.Context, identity Identity, i
 		observability.AddPersistentAttributes(domainCtx, s.logger, "domain").WarnContext(domainCtx, "incident validation failed", "incident_id", id, "error", domainErr)
 		return nil, domainErr
 	}
-	if err = s.incidents.PatchIncident(ctx, incident); err != nil {
+	if found, err = s.incidentRepository.PatchIncident(ctx, incident); err != nil {
 		logger.ErrorContext(ctx, "incident update failed", "incident_id", id, "error", err)
 		return nil, err
+	}
+	if !found {
+		logger.WarnContext(ctx, "incident update did not find incident", "incident_id", id)
+		return nil, ErrIncidentNotFound
 	}
 	logger.InfoContext(ctx, "incident patched", "incident_id", id)
 	return fromDomainIncident(incident), nil
@@ -174,10 +163,14 @@ func (s IncidentService) GetIncident(ctx context.Context, identity Identity, id 
 		return nil, err
 	}
 	s.recordAuthorization(ctx, "get_incident", "success")
-	incident, err := s.incidents.GetIncident(ctx, domain.IncidentID(id))
+	incident, found, err := s.incidentRepository.GetIncident(ctx, domain.IncidentID(id))
 	if err != nil {
 		logger.WarnContext(ctx, "incident not found", "incident_id", id, "error", err)
 		return nil, err
+	}
+	if !found {
+		logger.WarnContext(ctx, "incident not found", "incident_id", id)
+		return nil, ErrIncidentNotFound
 	}
 	domainCtx, domainSpan := s.tracer.Start(ctx, "domain.GetIncident")
 	incident, domainErr := domain.GetIncident(incident)

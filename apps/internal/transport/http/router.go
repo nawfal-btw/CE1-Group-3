@@ -16,25 +16,25 @@ type AuxHandler struct {
 }
 
 type Handler struct {
-	incidentHandler   IncidentHandler
-	assignmentHandler AssignmentHandler
-	responseHandler   ResponseHandler
-	logger            *slog.Logger
-	tracer            trace.Tracer
-	traceContext      propagation.TextMapPropagator
+	incidentHandler *IncidentHandler
+	resourceHandler *ResourceHandler
+	responseHandler *ResponseHandler
+	logger          *slog.Logger
+	tracer          trace.Tracer
+	traceContext    propagation.TextMapPropagator
 }
 
-func NewHandler(logger *slog.Logger, tracer trace.Tracer, traceContext propagation.TextMapPropagator) *Handler {
-	return &Handler{logger: logger, tracer: tracer, traceContext: traceContext}
+func NewHandler(incidentHandler *IncidentHandler, resourceHandler *ResourceHandler, logger *slog.Logger, tracer trace.Tracer, traceContext propagation.TextMapPropagator) *Handler {
+	return &Handler{incidentHandler: incidentHandler, resourceHandler: resourceHandler, logger: logger, tracer: tracer, traceContext: traceContext}
 }
 
 func (h Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("GET /v1/incident/{id}", h.incidentHandler.GetIncident)
 	mux.HandleFunc("POST /v1/incident", h.incidentHandler.PostIncident)
 	mux.HandleFunc("PATCH /v1/incident/{id}", h.incidentHandler.PatchIncident)
 
-	// mux.HandleFunc("GET /v1/checkhealth", h.auxHandler.checkhealth)
 	return h.middleware(mux)
 }
 
@@ -44,14 +44,14 @@ func (h Handler) middleware(next http.Handler) http.Handler {
 
 func (h Handler) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Should verify session and include user id to header
-		cookie, err := r.Cookie("session")
-		if err != nil || cookie.Value == "" {
-			http.Error(w, "session cookie not supplied or failed", http.StatusUnauthorized)
+		identity, ok := identityFromContext(r)
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
 			return
 		}
-		next.ServeHTTP(w, r)
-
+		metadata := observability.GetMetadataFromContext(r.Context())
+		metadata.UserID = identity.SubjectID.String()
+		next.ServeHTTP(w, r.WithContext(observability.AddMetadataToContext(r.Context(), metadata)))
 	})
 }
 
